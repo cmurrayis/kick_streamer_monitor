@@ -1,0 +1,355 @@
+openapi: 3.0.0
+info:
+  title: Kick Monitor CLI Interface Contract
+  description: Command-line interface contract for the Kick streamer monitoring service
+  version: 1.0.0
+
+# CLI interfaces documented as pseudo-REST for contract testing
+paths:
+  # Main monitoring command
+  /cli/monitor:
+    post:
+      summary: Start monitoring service
+      description: Main command to start the streamer monitoring service
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                config_file:
+                  type: string
+                  description: Path to configuration file
+                  default: ".env"
+                dry_run:
+                  type: boolean
+                  description: Test connections without making changes
+                  default: false
+                log_level:
+                  type: string
+                  enum: [DEBUG, INFO, WARNING, ERROR]
+                  default: "INFO"
+                daemon:
+                  type: boolean
+                  description: Run as background daemon
+                  default: false
+                manual:
+                  type: boolean
+                  description: Run in manual mode with real-time console display
+                  default: false
+      responses:
+        '0':
+          description: Service started successfully
+        '1':
+          description: Configuration error
+        '2':
+          description: Database connection failed
+        '3':
+          description: Kick.com API authentication failed
+        '4':
+          description: WebSocket connection failed
+
+  # Configuration management
+  /cli/config:
+    get:
+      summary: Show current configuration
+      description: Display current configuration settings
+      parameters:
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [json, yaml, env]
+            default: "json"
+        - name: mask_secrets
+          in: query
+          schema:
+            type: boolean
+            default: true
+      responses:
+        '0':
+          description: Configuration displayed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Configuration'
+
+    post:
+      summary: Validate configuration
+      description: Test configuration without starting monitoring
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                config_file:
+                  type: string
+                  default: ".env"
+      responses:
+        '0':
+          description: Configuration valid
+        '1':
+          description: Configuration invalid
+
+  # Streamer management
+  /cli/streamers:
+    get:
+      summary: List monitored streamers
+      description: Show all streamers currently being monitored
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [online, offline, all]
+            default: "all"
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [table, json, csv]
+            default: "table"
+      responses:
+        '0':
+          description: Streamers listed
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StreamerStatus'
+
+  # Health and status
+  /cli/status:
+    get:
+      summary: Show service status
+      description: Display current service health and connection status
+      responses:
+        '0':
+          description: Service healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceStatus'
+        '1':
+          description: Service unhealthy
+
+  # Database operations
+  /cli/db/migrate:
+    post:
+      summary: Run database migrations
+      description: Initialize or update database schema
+      responses:
+        '0':
+          description: Migrations completed successfully
+        '1':
+          description: Migration failed
+
+  /cli/db/health:
+    get:
+      summary: Check database connectivity
+      description: Test database connection and query performance
+      responses:
+        '0':
+          description: Database healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatabaseHealth'
+        '1':
+          description: Database connection failed
+
+  # Service management
+  /cli/service/install:
+    post:
+      summary: Install systemd service
+      description: Install and configure systemd service files
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user:
+                  type: string
+                  description: User to run service as
+                  default: "kick-monitor"
+                working_directory:
+                  type: string
+                  description: Service working directory
+                config_file:
+                  type: string
+                  description: Path to configuration file
+      responses:
+        '0':
+          description: Service installed successfully
+        '1':
+          description: Installation failed
+
+  /cli/service/uninstall:
+    delete:
+      summary: Uninstall systemd service
+      description: Remove systemd service configuration
+      responses:
+        '0':
+          description: Service uninstalled successfully
+        '1':
+          description: Uninstall failed
+
+components:
+  schemas:
+    Configuration:
+      type: object
+      properties:
+        kick_api:
+          type: object
+          properties:
+            client_id:
+              type: string
+              description: "[MASKED]"
+            client_secret:
+              type: string
+              description: "[MASKED]"
+            base_url:
+              type: string
+        database:
+          type: object
+          properties:
+            host:
+              type: string
+            port:
+              type: integer
+            database:
+              type: string
+            username:
+              type: string
+            password:
+              type: string
+              description: "[MASKED]"
+        monitoring:
+          type: object
+          properties:
+            batch_size:
+              type: integer
+            batch_timeout_ms:
+              type: integer
+            reconnect_delay_ms:
+              type: integer
+            max_retries:
+              type: integer
+
+    StreamerStatus:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        kick_user_id:
+          type: integer
+        status:
+          type: string
+          enum: [online, offline, unknown]
+        last_seen_online:
+          type: string
+          format: date-time
+        last_status_update:
+          type: string
+          format: date-time
+        is_active:
+          type: boolean
+
+    ServiceStatus:
+      type: object
+      properties:
+        service_running:
+          type: boolean
+        database_connected:
+          type: boolean
+        kick_api_authenticated:
+          type: boolean
+        websocket_connected:
+          type: boolean
+        monitored_streamers:
+          type: integer
+        events_processed_last_hour:
+          type: integer
+        last_event_timestamp:
+          type: string
+          format: date-time
+        uptime_seconds:
+          type: integer
+
+    DatabaseHealth:
+      type: object
+      properties:
+        connected:
+          type: boolean
+        response_time_ms:
+          type: number
+        active_connections:
+          type: integer
+        max_connections:
+          type: integer
+        last_migration:
+          type: string
+        schema_version:
+          type: string
+
+  # CLI Command Reference
+  x-cli-commands:
+    description: |
+      Complete CLI Command Reference:
+      
+      # Main Commands
+      kick-monitor start [--config=.env] [--dry-run] [--daemon] [--manual] [--log-level=INFO]
+      kick-monitor stop
+      kick-monitor restart
+      kick-monitor status
+      
+      # Configuration
+      kick-monitor config show [--format=json|yaml|env] [--mask-secrets]
+      kick-monitor config validate [--config=.env]
+      kick-monitor config generate-template
+      
+      # Streamer Management
+      kick-monitor streamers list [--status=all|online|offline] [--format=table|json|csv]
+      kick-monitor streamers test USERNAME
+      
+      # Database Operations
+      kick-monitor db migrate
+      kick-monitor db health
+      kick-monitor db reset [--confirm]
+      
+      # Service Management (requires sudo)
+      kick-monitor service install [--user=kick-monitor] [--config=/etc/kick-monitor/.env]
+      kick-monitor service uninstall
+      kick-monitor service enable
+      kick-monitor service disable
+      
+      # Logging and Debugging
+      kick-monitor logs [--follow] [--level=INFO] [--lines=100]
+      kick-monitor debug websocket USERNAME
+      kick-monitor debug api-token
+      
+      # Global Options
+      --help, -h        Show help information
+      --version, -v     Show version information
+      --quiet, -q       Suppress non-error output
+      --verbose         Enable verbose logging
+
+  x-exit-codes:
+    description: |
+      Standard Exit Codes:
+      
+      0   - Success
+      1   - General error / Configuration error
+      2   - Database connection failed
+      3   - Kick.com API authentication failed
+      4   - WebSocket connection failed
+      5   - Permission denied (service operations)
+      6   - Invalid command line arguments
+      7   - Service already running/stopped
+      8   - Required dependency missing
+      130 - Interrupted by user (Ctrl+C)
