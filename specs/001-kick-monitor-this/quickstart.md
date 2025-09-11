@@ -67,6 +67,9 @@ kick-monitor streamers test "popular_streamer"
 
 ### 5. Start Monitoring
 ```bash
+# Run in manual mode with real-time console display
+kick-monitor start --manual
+
 # Run in foreground (for testing)
 kick-monitor start
 
@@ -78,6 +81,23 @@ kick-monitor status
 ```
 
 ## Verification Steps
+
+### Test User Story 0: Manual Mode Display
+```bash
+# 1. Start monitoring in manual mode
+kick-monitor start --manual
+
+# 2. Verify real-time console display shows:
+#    - List of all streamers with current status
+#    - Color-coded status indicators (Green=online, Red=offline, Yellow=unknown)
+#    - Connection status and timestamp in header
+#    - Auto-refresh every 1-2 seconds
+
+# 3. Test keyboard shortcuts:
+#    - Press 'r' to force refresh
+#    - Press 's' to sort by status/username
+#    - Press 'q' to quit gracefully
+```
 
 ### Test User Story 1: Online Status Detection
 ```bash

@@ -1,7 +1,7 @@
 # Claude Code Context: Kick Streamer Monitor
 
 ## Project Overview
-Real-time monitoring service that tracks Kick.com streamer online/offline status using WebSocket connections and updates PostgreSQL database. Designed as a Python asyncio service for 24/7 operation on Debian 12+ servers.
+Real-time monitoring service that tracks Kick.com streamer online/offline status using WebSocket connections and updates PostgreSQL database. Designed as a Python asyncio service for 24/7 operation on Debian 12+ servers. Includes manual mode with rich console interface for interactive monitoring and testing.
 
 ## Technology Stack
 - **Language**: Python 3.11+ (asyncio, websockets for real-time events)
@@ -37,6 +37,7 @@ tests/
 - `psycopg3` - PostgreSQL async database driver
 - `pydantic` - Configuration validation and data models
 - `python-dotenv` - Environment variable management
+- `rich` - Terminal UI for manual mode with real-time display
 - `pytest-asyncio` - Async testing framework
 
 ## Development Workflow
@@ -72,3 +73,5 @@ Environment-based (.env file) with categories:
 - Established OAuth 2.1 authentication flow
 - Designed WebSocket event handling architecture
 - Created database schema with proper indexing
+- Added manual mode with Rich library for real-time console display
+- Extended CLI interface to support --manual flag for interactive monitoring

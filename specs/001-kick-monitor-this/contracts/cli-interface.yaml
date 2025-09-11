@@ -33,6 +33,10 @@ paths:
                   type: boolean
                   description: Run as background daemon
                   default: false
+                manual:
+                  type: boolean
+                  description: Run in manual mode with real-time console display
+                  default: false
       responses:
         '0':
           description: Service started successfully
@@ -299,7 +303,7 @@ components:
       Complete CLI Command Reference:
       
       # Main Commands
-      kick-monitor start [--config=.env] [--dry-run] [--daemon] [--log-level=INFO]
+      kick-monitor start [--config=.env] [--dry-run] [--daemon] [--manual] [--log-level=INFO]
       kick-monitor stop
       kick-monitor restart
       kick-monitor status

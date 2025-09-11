@@ -34,16 +34,17 @@
 - Async database operations to avoid blocking WebSocket handling
 
 ## Service Architecture Decision
-**Decision**: Single Python asyncio service with systemd integration  
-**Rationale**: Efficient resource usage, simple deployment, excellent async WebSocket support  
+**Decision**: Single Python asyncio service with systemd integration and manual mode support  
+**Rationale**: Efficient resource usage, simple deployment, excellent async WebSocket support, rich console UI capabilities  
 **Alternatives considered**: 
-- Go (good performance but more complex WebSocket ecosystem)
-- Node.js (good WebSocket support but higher memory usage)
+- Go (good performance but more complex WebSocket ecosystem and limited TUI libraries)
+- Node.js (good WebSocket support but higher memory usage, limited console UI options)
 
 ### Implementation Details:
 - Service structure: monitor-lib library + CLI interface
 - Async/await pattern for concurrent streamer monitoring
 - JSON structured logging for observability
+- Manual mode: Real-time console UI with Rich library for formatted display
 
 ## Error Handling Strategy Decision
 **Decision**: Comprehensive retry mechanisms with circuit breaker pattern  
@@ -98,6 +99,23 @@
 - PostgreSQL connection pool size: 5-10 connections
 - Memory-based buffering for pending updates
 - Metrics collection for monitoring performance
+
+## Manual Mode UI Decision
+**Decision**: Rich library for terminal-based real-time interface  
+**Rationale**: Professional console UI, excellent async support, cross-platform compatibility  
+**Alternatives considered**:
+- Curses (too complex, poor Windows support)
+- Textual (overkill for simple status display)
+- Custom ANSI codes (too much manual work)
+
+### Implementation Details:
+- Rich Live display for real-time updates
+- Table layout with streamer status columns
+- Color coding: Green (online), Red (offline), Yellow (unknown)
+- Status indicators: connection health, API rate limiting
+- Keyboard shortcuts: 'q' to quit, 'r' to refresh, 's' to sort
+- Header: timestamp, total streamers, connection status
+- Auto-refresh every 1-2 seconds
 
 ## Security Considerations
 **Decision**: Principle of least privilege with credential rotation support  

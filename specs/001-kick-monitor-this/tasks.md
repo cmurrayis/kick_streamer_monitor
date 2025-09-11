@@ -29,7 +29,7 @@
 ## Phase 3.1: Setup & Project Structure
 
 - [ ] **T001** Create Python project structure with src/models/, src/services/, src/cli/, src/lib/, tests/contract/, tests/integration/, tests/unit/
-- [ ] **T002** Initialize Python project with pyproject.toml dependencies: asyncio, websockets, psycopg3, pydantic, python-dotenv, pytest, pytest-asyncio
+- [ ] **T002** Initialize Python project with pyproject.toml dependencies: asyncio, websockets, psycopg3, pydantic, python-dotenv, rich, pytest, pytest-asyncio
 - [ ] **T003** [P] Configure development tools: .gitignore, requirements-dev.txt, setup.py for editable install
 - [ ] **T004** [P] Create basic logging configuration in src/lib/logging.py for structured JSON logs
 
@@ -70,6 +70,13 @@
 - [ ] **T023** [P] CLI service commands in src/cli/service.py (start, stop, status)
 - [ ] **T024** [P] CLI database commands in src/cli/database.py (migrate, health)
 - [ ] **T025** Main CLI entry point in src/cli/main.py with argument parsing and command routing
+- [ ] **T025b** Manual mode UI implementation in src/cli/manual.py with Rich-based real-time console display
+  - Rich Live display with auto-refresh every 1-2 seconds
+  - Table layout: Username | Status | Last Seen | Updates Count
+  - Color coding: Green (online), Red (offline), Yellow (unknown)  
+  - Header: timestamp, connection status, total streamers
+  - Keyboard shortcuts: 'q' quit, 'r' refresh, 's' sort by status
+  - Graceful shutdown on Ctrl+C or 'q' key
 
 ## Phase 3.6: Integration & Coordination
 
@@ -85,6 +92,7 @@
 - [ ] **T032** [P] Production WebSocket client testing utilities in tests/fixtures/websocket_utils.py
 - [ ] **T033** [P] Test database setup scripts in tests/fixtures/test_db.py
 - [ ] **T034** End-to-end MVP test simulating complete monitoring cycle in tests/integration/test_mvp.py
+- [ ] **T034b** [P] Manual mode UI testing in tests/integration/test_manual_mode.py
 
 ## Phase 3.8: MVP Polish & Documentation
 
@@ -101,6 +109,7 @@
 - All tests (T005-T012) before any implementation (T013+)
 - Models (T013-T016) before services (T017-T020)
 - Services before CLI implementation (T021-T025)
+- Core monitoring service (T020) before manual mode UI (T025b)
 - Core functionality before integration (T026-T029)
 - Implementation before validation (T030-T039)
 
@@ -140,6 +149,12 @@ Task: "CLI service commands in src/cli/service.py (start, stop, status)"
 Task: "CLI database commands in src/cli/database.py (migrate, health)"
 ```
 
+### Manual Mode Implementation Phase
+```bash
+# T025b can be developed alongside other CLI components:
+Task: "Manual mode UI implementation in src/cli/manual.py with Rich-based real-time console display"
+```
+
 ## MVP Testing Strategy
 
 ### Production API Testing Requirements
@@ -149,11 +164,13 @@ Task: "CLI database commands in src/cli/database.py (migrate, health)"
 4. **Rate Limit Compliance**: Respect official API rate limits and best practices
 
 ### Validation Scenarios (from quickstart.md)
-1. **Configuration Validation**: `kick-monitor config validate` succeeds
-2. **Database Setup**: `kick-monitor db migrate` creates schema successfully
-3. **Live Streaming**: Monitor real Kick.com streamers for online/offline events
-4. **Status Updates**: Verify database updates from real events within expected timeframe  
-5. **Error Recovery**: Test with actual API errors and network failures
+1. **Manual Mode Display**: `kick-monitor start --manual` shows real-time console interface
+2. **Configuration Validation**: `kick-monitor config validate` succeeds
+3. **Database Setup**: `kick-monitor db migrate` creates schema successfully
+4. **Live Streaming**: Monitor real Kick.com streamers for online/offline events
+5. **Status Updates**: Verify database updates from real events within expected timeframe  
+6. **Error Recovery**: Test with actual API errors and network failures
+7. **Manual Mode Interaction**: Test keyboard shortcuts (q, r, s) and display updates
 
 ## Production API Requirements
 
@@ -179,10 +196,12 @@ Task: "CLI database commands in src/cli/database.py (migrate, health)"
 
 - **Production Authentication**: Full OAuth 2.1 implementation for live Kick.com API integration
 - **Real WebSocket Connection**: Direct connection to Kick.com Pusher service with proper authentication
+- **Manual Mode UI**: Rich library implementation with real-time updates and keyboard interaction
 - **PostgreSQL Required**: Production database setup required for realistic testing
 - **API Registration**: Requires valid Kick.com developer account and registered application
 - **Rate Limiting**: Implement proper backoff and retry logic for API compliance
 - **Documentation**: Focus on production deployment and API integration setup
+- **Console Interface**: Color-coded status display with auto-refresh and interactive controls
 
 ## Task Generation Rules Applied
 
@@ -200,3 +219,10 @@ Task: "CLI database commands in src/cli/database.py (migrate, health)"
 - [x] Each task specifies exact file path for implementation
 - [x] No task modifies same file as another [P] task
 - [x] Production MVP focus maintained throughout task breakdown
+
+## Summary
+
+**Total Tasks**: 41 tasks across 8 phases for complete MVP implementation
+**Key Features**: Production API integration, manual mode with Rich UI, comprehensive testing
+**New Additions**: Manual mode UI (T025b) with real-time console display and keyboard controls
+**Ready for Execution**: All tasks specify exact file paths and implementation requirements

@@ -29,11 +29,11 @@
 - Phase 3-4: Implementation execution (manual or via tools)
 
 ## Summary
-Real-time monitoring service that connects to Kick.com's Pusher WebSocket service to track streamer online/offline status changes and updates a PostgreSQL database. Service authenticates with Kick.com API, handles connection failures and token expiration, and operates as a system service on Debian 12+.
+Real-time monitoring service that connects to Kick.com's Pusher WebSocket service to track streamer online/offline status changes and updates a PostgreSQL database. Service authenticates with Kick.com API, handles connection failures and token expiration, and operates as a system service on Debian 12+. Includes manual mode with real-time console display for interactive monitoring and testing.
 
 ## Technical Context
 **Language/Version**: Python 3.11+ (fast, efficient, excellent websocket/async support)  
-**Primary Dependencies**: asyncio, websockets, psycopg3, pydantic, python-dotenv  
+**Primary Dependencies**: asyncio, websockets, psycopg3, pydantic, python-dotenv, rich (for console UI)  
 **Storage**: PostgreSQL (existing database with streamer configuration)  
 **Testing**: pytest with pytest-asyncio for async testing  
 **Target Platform**: Debian 12+ Linux server as systemd service
@@ -54,7 +54,7 @@ Real-time monitoring service that connects to Kick.com's Pusher WebSocket servic
 **Architecture**:
 - EVERY feature as library? (Yes - monitor-lib with CLI interface)
 - Libraries listed: kick-monitor-lib (websocket monitoring + database updates)
-- CLI per library: kick-monitor --help/--version/--config/--dry-run
+- CLI per library: kick-monitor --help/--version/--config/--dry-run/--manual
 - Library docs: llms.txt format planned? (Yes)
 
 **Testing (NON-NEGOTIABLE)**:
