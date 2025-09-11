@@ -1,3 +1,4 @@
+
 # Kick Streamer Status Monitor
 
 Real-time monitoring service that tracks Kick.com streamer online/offline status using WebSocket connections and updates PostgreSQL database. Designed as a Python asyncio service for 24/7 operation on Debian 12+ servers with Rich console interface for interactive monitoring.
