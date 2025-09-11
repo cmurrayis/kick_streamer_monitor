@@ -1,0 +1,217 @@
+openapi: 3.0.0
+info:
+  title: Kick.com WebSocket Events Contract
+  description: WebSocket event schema for real-time streamer status monitoring
+  version: 1.0.0
+
+# Note: WebSocket events are not REST endpoints, but we document the event schemas here
+paths: {}
+
+components:
+  schemas:
+    # Base WebSocket Event Structure
+    WebSocketEvent:
+      type: object
+      required:
+        - event
+        - data
+      properties:
+        event:
+          type: string
+          description: Event type identifier
+        data:
+          type: object
+          description: Event-specific payload
+        channel:
+          type: string
+          description: Pusher channel name (optional)
+
+    # Streamer Online Event
+    StreamerIsLiveEvent:
+      allOf:
+        - $ref: '#/components/schemas/WebSocketEvent'
+        - type: object
+          properties:
+            event:
+              type: string
+              enum: ["App\\Events\\StreamerIsLive"]
+            data:
+              type: object
+              required:
+                - channel_id
+                - session
+              properties:
+                channel_id:
+                  type: integer
+                  description: Kick.com channel ID
+                user_id:
+                  type: integer
+                  description: Kick.com user ID
+                session:
+                  type: object
+                  required:
+                    - id
+                    - is_live
+                  properties:
+                    id:
+                      type: string
+                      description: Live session identifier
+                    title:
+                      type: string
+                      description: Stream title
+                    is_live:
+                      type: boolean
+                      description: Current live status
+                    viewer_count:
+                      type: integer
+                      description: Current viewer count
+                    created_at:
+                      type: string
+                      format: date-time
+                      description: Stream start time
+                    categories:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          id:
+                            type: integer
+                          name:
+                            type: string
+
+    # Streamer Offline Event  
+    StreamerOfflineEvent:
+      allOf:
+        - $ref: '#/components/schemas/WebSocketEvent'
+        - type: object
+          properties:
+            event:
+              type: string
+              enum: ["App\\Events\\StreamerOffline"]
+            data:
+              type: object
+              required:
+                - channel_id
+              properties:
+                channel_id:
+                  type: integer
+                  description: Kick.com channel ID
+                user_id:
+                  type: integer
+                  description: Kick.com user ID
+                session_ended_at:
+                  type: string
+                  format: date-time
+                  description: When the stream ended
+                final_viewer_count:
+                  type: integer
+                  description: Viewer count when stream ended
+
+    # Connection Events
+    PusherConnectionEstablished:
+      allOf:
+        - $ref: '#/components/schemas/WebSocketEvent'
+        - type: object
+          properties:
+            event:
+              type: string
+              enum: ["pusher:connection_established"]
+            data:
+              type: object
+              properties:
+                socket_id:
+                  type: string
+                  description: WebSocket connection ID
+                activity_timeout:
+                  type: integer
+                  description: Seconds before connection timeout
+
+    PusherSubscriptionSucceeded:
+      allOf:
+        - $ref: '#/components/schemas/WebSocketEvent'
+        - type: object
+          properties:
+            event:
+              type: string
+              enum: ["pusher:subscription_succeeded"]
+            channel:
+              type: string
+              description: Channel that was subscribed to
+            data:
+              type: object
+              description: Channel-specific subscription data
+
+    # Error Events
+    PusherError:
+      allOf:
+        - $ref: '#/components/schemas/WebSocketEvent'
+        - type: object
+          properties:
+            event:
+              type: string
+              enum: ["pusher:error"]
+            data:
+              type: object
+              properties:
+                message:
+                  type: string
+                  description: Error message
+                code:
+                  type: integer
+                  description: Error code
+
+    # Heartbeat/Ping Events
+    PusherPing:
+      allOf:
+        - $ref: '#/components/schemas/WebSocketEvent'
+        - type: object
+          properties:
+            event:
+              type: string
+              enum: ["pusher:ping"]
+            data:
+              type: object
+
+    PusherPong:
+      allOf:
+        - $ref: '#/components/schemas/WebSocketEvent'
+        - type: object
+          properties:
+            event:
+              type: string
+              enum: ["pusher:pong"]
+            data:
+              type: object
+
+  # WebSocket Connection Flow
+  x-websocket-flow:
+    description: |
+      WebSocket Connection and Event Flow:
+      
+      1. Connect to WebSocket endpoint (implementation-specific)
+      2. Receive pusher:connection_established event
+      3. Subscribe to channel: "channel.{channel_id}" for each monitored streamer
+      4. Receive pusher:subscription_succeeded for each successful subscription
+      5. Monitor for StreamerIsLive and StreamerOffline events
+      6. Handle pusher:ping with pusher:pong responses
+      7. Implement reconnection logic for connection failures
+      
+      Channel Naming Pattern:
+      - Individual streamer: "channel.{channel_id}"
+      - Global events: "global" (if available)
+      
+      Authentication:
+      - Include Bearer token in connection headers
+      - May require additional headers like X-XSRF-TOKEN (implementation-specific)
+
+  # Event Processing Requirements
+  x-event-processing:
+    description: |
+      Event Processing Requirements:
+      
+      1. Deduplication: Use session_id or timestamp to prevent duplicate processing
+      2. Ordering: Events may arrive out of order, use timestamps for sequencing
+      3. Validation: Validate all required fields before processing
+      4. Error Handling: Log malformed events but continue processing
+      5. Database Updates: Update streamer status atomically with event logging
+      6. Monitoring: Track event processing latency and error rates

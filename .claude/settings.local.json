@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(scripts/create-new-feature.sh:*)",
+      "Bash(scripts/setup-plan.sh:*)",
+      "WebFetch(domain:docs.kick.com)",
+      "WebFetch(domain:dev.kick.com)",
+      "WebFetch(domain:github.com)",
+      "WebSearch",
+      "Bash(scripts/check-task-prerequisites.sh:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

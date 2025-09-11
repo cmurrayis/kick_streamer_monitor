@@ -1,0 +1,199 @@
+openapi: 3.0.0
+info:
+  title: Kick.com API Contract
+  description: External API contract for Kick.com authentication and data access
+  version: 1.0.0
+servers:
+  - url: https://kick.com/api/v1
+    description: Kick.com REST API
+  - url: https://id.kick.com
+    description: Kick.com OAuth Server
+
+paths:
+  # OAuth Authentication Endpoints
+  /oauth/token:
+    post:
+      summary: Exchange authorization code for access token
+      description: OAuth 2.1 token endpoint for authentication
+      servers:
+        - url: https://id.kick.com
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - grant_type
+                - client_id
+                - client_secret
+              properties:
+                grant_type:
+                  type: string
+                  enum: [authorization_code, refresh_token, client_credentials]
+                client_id:
+                  type: string
+                  description: Application client ID
+                client_secret:
+                  type: string
+                  description: Application client secret
+                code:
+                  type: string
+                  description: Authorization code (for authorization_code grant)
+                refresh_token:
+                  type: string
+                  description: Refresh token (for refresh_token grant)
+                redirect_uri:
+                  type: string
+                  description: Redirect URI used in authorization
+                code_verifier:
+                  type: string
+                  description: PKCE code verifier
+      responses:
+        '200':
+          description: Token successfully issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                    description: Bearer access token
+                  token_type:
+                    type: string
+                    enum: [Bearer]
+                  expires_in:
+                    type: integer
+                    description: Token lifetime in seconds
+                  refresh_token:
+                    type: string
+                    description: Refresh token for obtaining new access tokens
+                  scope:
+                    type: string
+                    description: Granted scopes
+        '400':
+          description: Invalid request parameters
+        '401':
+          description: Invalid client credentials
+
+  # Channel Information Endpoints  
+  /channels/{username}:
+    get:
+      summary: Get channel information
+      description: Retrieve detailed channel information for a streamer
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Kick.com username
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Channel information retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    description: Channel ID
+                  user_id:
+                    type: integer
+                    description: User ID
+                  slug:
+                    type: string
+                    description: Channel username/slug
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      username:
+                        type: string
+                      bio:
+                        type: string
+                  livestream:
+                    type: object
+                    nullable: true
+                    properties:
+                      id:
+                        type: integer
+                      title:
+                        type: string
+                      is_live:
+                        type: boolean
+                      viewer_count:
+                        type: integer
+                      created_at:
+                        type: string
+                        format: date-time
+        '404':
+          description: Channel not found
+        '401':
+          description: Invalid or expired token
+
+  /channels/{username}/livestream:
+    get:
+      summary: Get current livestream status
+      description: Get current streaming status and viewer information
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Kick.com username
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Livestream status retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  title:
+                    type: string
+                  is_live:
+                    type: boolean
+                  viewer_count:
+                    type: integer
+                  created_at:
+                    type: string
+                    format: date-time
+                  session_id:
+                    type: string
+        '404':
+          description: No active livestream
+        '401':
+          description: Invalid or expired token
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: OAuth 2.1 Bearer token
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error code
+        error_description:
+          type: string
+          description: Human-readable error description
+        status:
+          type: integer
+          description: HTTP status code
