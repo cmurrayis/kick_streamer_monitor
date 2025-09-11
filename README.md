@@ -25,7 +25,7 @@ Real-time monitoring service that tracks Kick.com streamer online/offline status
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/your-username/kick-streamer-monitor.git
+   git clone https://github.com/your-username/kick_streamer_monitor.git
    cd kick-streamer-monitor
    ```
 
