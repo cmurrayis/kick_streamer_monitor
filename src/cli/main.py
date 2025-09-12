@@ -269,6 +269,29 @@ Report issues at: https://github.com/your-org/kick-monitor/issues
         action='store_true',
         help='Use simple polling monitor (avoid WebSocket complexity)'
     )
+    service_parser.add_argument(
+        '--web-dashboard',
+        action='store_true',
+        default=True,
+        help='Enable web dashboard for daemon mode (default: enabled)'
+    )
+    service_parser.add_argument(
+        '--no-web-dashboard',
+        action='store_true',
+        help='Disable web dashboard'
+    )
+    service_parser.add_argument(
+        '--dashboard-port',
+        type=int,
+        default=8080,
+        help='Web dashboard port (default: 8080)'
+    )
+    service_parser.add_argument(
+        '--dashboard-host',
+        type=str,
+        default='127.0.0.1',
+        help='Web dashboard host (default: 127.0.0.1)'
+    )
     
     # stop command
     stop_parser = subparsers.add_parser(

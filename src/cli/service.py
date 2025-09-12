@@ -22,6 +22,7 @@ from services import (
     KickMonitorService, MonitoringMode
 )
 from services.simple_monitor import SimpleMonitorService
+from services.web_dashboard import WebDashboardService
 from lib.logging import get_logger
 from .manual import run_manual_mode
 
@@ -37,6 +38,7 @@ class ServiceCommands:
     def __init__(self):
         self.logger = get_logger(__name__)
         self._monitor_service: Optional[KickMonitorService] = None
+        self._web_dashboard: Optional[WebDashboardService] = None
         self._shutdown_requested = False
     
     async def start(self, args: argparse.Namespace) -> int:
@@ -47,6 +49,11 @@ class ServiceCommands:
             dry_run = getattr(args, 'dry_run', False)
             daemon = getattr(args, 'daemon', False)
             manual = getattr(args, 'manual', False)
+            
+            # Web dashboard options (for daemon mode)
+            enable_web_dashboard = getattr(args, 'web_dashboard', True) and not getattr(args, 'no_web_dashboard', False)
+            dashboard_host = getattr(args, 'dashboard_host', '127.0.0.1')
+            dashboard_port = getattr(args, 'dashboard_port', 8080)
             log_level = getattr(args, 'log_level', 'INFO')
             browser_fallback = getattr(args, 'browser_fallback', True)
             simple_mode = getattr(args, 'simple_mode', False)
@@ -147,6 +154,17 @@ class ServiceCommands:
             await self._monitor_service.start()
             
             print(f"✓ Monitoring service started successfully")
+            
+            # Start web dashboard for daemon mode
+            if daemon and enable_web_dashboard:
+                print(f"Starting web dashboard on {dashboard_host}:{dashboard_port}...")
+                self._web_dashboard = WebDashboardService(
+                    monitor_service=self._monitor_service,
+                    host=dashboard_host,
+                    port=dashboard_port
+                )
+                await self._web_dashboard.start()
+                print(f"✓ Web dashboard available at: {self._web_dashboard.url}")
             
             # Different behavior based on mode
             if manual:
@@ -307,11 +325,21 @@ class ServiceCommands:
     async def _shutdown_service(self) -> int:
         """Gracefully shutdown the service."""
         try:
-            if self._monitor_service:
-                print("\nShutting down monitoring service...")
-                await self._monitor_service.stop()
-                print("✓ Service shutdown complete")
+            print("\nShutting down services...")
             
+            # Stop web dashboard first
+            if self._web_dashboard and self._web_dashboard.is_running:
+                print("Stopping web dashboard...")
+                await self._web_dashboard.stop()
+                print("✓ Web dashboard stopped")
+            
+            # Stop monitoring service
+            if self._monitor_service:
+                print("Stopping monitoring service...")
+                await self._monitor_service.stop()
+                print("✓ Monitoring service stopped")
+            
+            print("✓ Shutdown complete")
             return 0
         
         except Exception as e:
