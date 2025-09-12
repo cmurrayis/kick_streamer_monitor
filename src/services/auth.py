@@ -521,7 +521,7 @@ class KickOAuthService:
     
     async def test_authentication(self) -> Dict[str, Any]:
         """
-        Test authentication by making a simple API call.
+        Test authentication by checking if we can get channel info.
         
         Returns:
             Test result information
@@ -529,23 +529,25 @@ class KickOAuthService:
         try:
             token = await self.get_access_token()
             
-            # Make a test request to verify token works
-            # Note: Replace with actual Kick.com test endpoint
-            test_endpoint = "user"  # Or whatever test endpoint Kick.com provides
+            # Test with a known username instead of blocked endpoints
+            test_username = "xqc"  # Known public streamer
             
             try:
-                result = await self.make_authenticated_request("GET", test_endpoint)
+                # This will use browser fallback if OAuth is blocked
+                result = await self.get_channel_info(test_username)
                 return {
-                    "status": "success",
+                    "status": "success", 
                     "token_expires_in": self._current_token.time_until_expiry().total_seconds() if self._current_token else None,
-                    "test_result": result
+                    "test_result": f"Successfully fetched {test_username} channel info",
+                    "browser_fallback_used": self._oauth_blocked
                 }
-            except AuthenticationError:
-                # If test endpoint fails, just return token info
+            except Exception as api_error:
+                # If even channel info fails, just return token status
                 return {
                     "status": "token_obtained",
                     "token_expires_in": self._current_token.time_until_expiry().total_seconds() if self._current_token else None,
-                    "note": "Token obtained but test endpoint unavailable"
+                    "note": f"Token obtained but API calls blocked: {str(api_error)}",
+                    "browser_fallback_available": self.enable_browser_fallback
                 }
         
         except Exception as e:

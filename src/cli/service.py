@@ -21,6 +21,7 @@ from services import (
     KickWebSocketService, PusherConfig,
     KickMonitorService, MonitoringMode
 )
+from services.simple_monitor import SimpleMonitorService
 from lib.logging import get_logger
 from .manual import run_manual_mode
 
@@ -48,6 +49,7 @@ class ServiceCommands:
             manual = getattr(args, 'manual', False)
             log_level = getattr(args, 'log_level', 'INFO')
             browser_fallback = getattr(args, 'browser_fallback', True)
+            simple_mode = getattr(args, 'simple_mode', False)
             
             # Determine monitoring mode
             if dry_run:
@@ -62,7 +64,8 @@ class ServiceCommands:
                 print("Error: Cannot run in both daemon and manual mode")
                 return 6
             
-            print(f"Starting Kick Streamer Monitor in {mode.value} mode...")
+            monitor_type = "simple polling" if simple_mode else "full WebSocket"
+            print(f"Starting Kick Streamer Monitor in {mode.value} mode ({monitor_type})...")
             
             # Setup logging for the service  
             from lib.logging import setup_logging
@@ -91,7 +94,6 @@ class ServiceCommands:
             
             db_service = DatabaseService(db_config)
             oauth_service = KickOAuthService(oauth_config, enable_browser_fallback=browser_fallback)
-            websocket_service = KickWebSocketService(pusher_config, oauth_service)
             
             # Test connections before starting
             print("Testing connections...")
@@ -107,18 +109,34 @@ class ServiceCommands:
             # Test OAuth
             await oauth_service.start()
             auth_test = await oauth_service.test_authentication()
-            if auth_test['status'] == 'failed':
+            if auth_test['status'] not in ['success', 'token_obtained']:
                 print(f"Error: OAuth authentication failed: {auth_test.get('error')}")
                 return 3
-            print("✓ OAuth authentication OK")
             
-            # Initialize monitoring service
-            self._monitor_service = KickMonitorService(
-                database_service=db_service,
-                oauth_service=oauth_service,
-                websocket_service=websocket_service,
-                mode=mode
-            )
+            # Show auth test result
+            if auth_test.get('browser_fallback_used'):
+                print("✓ OAuth + Browser fallback ready")
+            elif auth_test.get('browser_fallback_available'):
+                print("✓ OAuth ready (browser fallback available)")
+            else:
+                print("✓ OAuth ready")
+            
+            # Initialize monitoring service based on mode
+            if simple_mode:
+                print("Using simple polling monitor (like JavaScript version)")
+                self._monitor_service = SimpleMonitorService(
+                    database_service=db_service,
+                    oauth_service=oauth_service
+                )
+            else:
+                print("Using full WebSocket monitor")
+                websocket_service = KickWebSocketService(pusher_config, oauth_service)
+                self._monitor_service = KickMonitorService(
+                    database_service=db_service,
+                    oauth_service=oauth_service,
+                    websocket_service=websocket_service,
+                    mode=mode
+                )
             
             # Setup signal handlers for graceful shutdown
             if not daemon:

@@ -264,6 +264,11 @@ Report issues at: https://github.com/your-org/kick-monitor/issues
         action='store_false',
         help='Disable browser fallback, OAuth only'
     )
+    service_parser.add_argument(
+        '--simple-mode',
+        action='store_true',
+        help='Use simple polling monitor (avoid WebSocket complexity)'
+    )
     
     # stop command
     stop_parser = subparsers.add_parser(
