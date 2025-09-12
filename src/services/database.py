@@ -320,10 +320,10 @@ class DatabaseService:
         async with self.transaction() as conn:
             query = """
             UPDATE streamer 
-            SET status = $2, 
+            SET status = $2::varchar, 
                 last_status_update = $3,
                 last_seen_online = CASE 
-                    WHEN $2 = 'online' THEN $3 
+                    WHEN $2::varchar = 'online' THEN $3 
                     ELSE last_seen_online 
                 END,
                 updated_at = CURRENT_TIMESTAMP

@@ -35,11 +35,15 @@ class SimpleMonitorService:
         self._is_running = False
         self._stop_event = asyncio.Event()
         self._main_task: Optional[asyncio.Task] = None
+        self._start_time: Optional[datetime] = None
         
         # Statistics
         self._total_checks = 0
         self._successful_checks = 0
         self._failed_checks = 0
+        
+        # Cached streamer data for manual mode
+        self._cached_streamers: List[Streamer] = []
     
     async def start(self):
         """Start the simple monitoring service."""
@@ -57,6 +61,7 @@ class SimpleMonitorService:
             if not self.oauth_service._session:
                 await self.oauth_service.start()
             
+            self._start_time = datetime.now(timezone.utc)
             self._is_running = True
             self._main_task = asyncio.create_task(self._monitoring_loop())
             
@@ -116,6 +121,9 @@ class SimpleMonitorService:
         try:
             # Get streamers from database
             streamers = await self.database_service.get_active_streamers()
+            
+            # Update cached streamers for manual mode
+            self._cached_streamers = streamers
             
             if not streamers:
                 logger.info('No active streamers found. Cycle finished.')
@@ -246,6 +254,75 @@ class SimpleMonitorService:
             ) * 100,
             "oauth_stats": self.oauth_service.get_stats()
         }
+    
+    def get_monitoring_stats(self) -> Dict[str, Any]:
+        """Get comprehensive monitoring statistics compatible with manual mode."""
+        from datetime import datetime, timezone, timedelta
+        
+        runtime = timedelta(seconds=0)
+        if self._start_time:
+            runtime = datetime.now(timezone.utc) - self._start_time
+        
+        # Count streamers by status from cached data
+        total_monitored = len(self._cached_streamers)
+        online_count = sum(1 for s in self._cached_streamers if s.status.value == 'online')
+        offline_count = sum(1 for s in self._cached_streamers if s.status.value == 'offline')
+        unknown_count = sum(1 for s in self._cached_streamers if s.status.value == 'unknown')
+        
+        return {
+            "service_status": {
+                "is_running": self._is_running,
+                "mode": "simple",
+                "uptime_seconds": runtime.total_seconds(),
+                "start_time": self._start_time.isoformat() if hasattr(self, '_start_time') and self._start_time else None
+            },
+            "streamers": {
+                "total_monitored": total_monitored,
+                "online": online_count,
+                "offline": offline_count,
+                "unknown": unknown_count,
+                "subscribed": 0,  # N/A for simple mode
+                "failed": 0
+            },
+            "connections": {
+                "websocket_connected": False,  # Simple mode doesn't use WebSocket
+                "oauth_authenticated": bool(self.oauth_service._session)
+            },
+            "processing": {
+                "total_checks": self._total_checks,
+                "successful_checks": self._successful_checks,
+                "failed_checks": self._failed_checks,
+                "success_rate": (self._successful_checks / max(1, self._total_checks)) * 100,
+                "events_processed": 0,  # Simple mode doesn't track events separately
+                "events_pending": 0
+            }
+        }
+    
+    def get_streamer_details(self) -> List[Dict[str, Any]]:
+        """Get detailed information about all monitored streamers."""
+        try:
+            result = []
+            
+            for streamer in self._cached_streamers:
+                result.append({
+                    "id": streamer.id,
+                    "username": streamer.username,
+                    "kick_user_id": streamer.kick_user_id,
+                    "display_name": streamer.display_name,
+                    "status": streamer.status.value,
+                    "last_seen_online": streamer.last_seen_online.isoformat() if streamer.last_seen_online else None,
+                    "last_status_update": streamer.last_status_update.isoformat() if streamer.last_status_update else None,
+                    "is_subscribed": False,  # Simple mode doesn't use subscriptions
+                    "subscription_time": None,
+                    "consecutive_failures": 0,  # Simple mode doesn't track this
+                    "last_event_timestamp": streamer.last_status_update.isoformat() if streamer.last_status_update else None,
+                    "pending_events_count": 0
+                })
+            
+            return sorted(result, key=lambda x: x["username"])
+        except Exception as e:
+            logger.error(f"Error getting streamer details: {e}")
+            return []
     
     @property
     def is_running(self) -> bool:
