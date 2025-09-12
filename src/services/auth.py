@@ -305,10 +305,7 @@ class KickOAuthService:
         
         for attempt in range(self.config.max_retries):
             try:
-                logger.info(f"🌐 API Request [{attempt + 1}/{self.config.max_retries}]: {method.upper()} {url}")
-                logger.info(f"📋 Headers: {dict(headers)}")
-                if kwargs.get('data') or kwargs.get('json'):
-                    logger.info(f"📄 Request Body: {kwargs.get('data', kwargs.get('json', 'None'))}")
+                logger.debug(f"Request: {method.upper()} {url}")
                 
                 async with self._session.request(
                     method,
@@ -319,21 +316,17 @@ class KickOAuthService:
                     
                     self._record_request()
                     
-                    logger.info(f"📨 Response Status: {response.status}")
-                    logger.info(f"📋 Response Headers: {dict(response.headers)}")
-                    
                     if response.status == 200:
                         response_data = await response.json()
-                        logger.info(f"✅ API request successful: {method} {endpoint}")
-                        logger.debug(f"📄 Response Body: {response_data}")
+                        logger.debug(f"Success: {method} {endpoint}")
                         return response_data
                     
                     elif response.status == 401:
                         error_text = await response.text()
-                        logger.warning(f"🔐 401 Unauthorized: {error_text}")
+                        logger.error(f"401 Unauthorized: {error_text[:100]}")
                         # Token might be invalid, clear it and retry once
                         if attempt == 0:
-                            logger.info("Received 401, clearing token and retrying")
+                            logger.info("Token invalid, retrying with new token")
                             async with self._token_lock:
                                 self._current_token = None
                             continue
@@ -342,37 +335,31 @@ class KickOAuthService:
                     
                     elif response.status == 403:
                         error_text = await response.text()
-                        logger.error(f"🚫 403 Forbidden (Cloudflare/Security Policy): {error_text}")
-                        logger.error(f"🔍 Blocked Request Details:")
-                        logger.error(f"   URL: {url}")
-                        logger.error(f"   Method: {method.upper()}")
-                        logger.error(f"   User-Agent: {headers.get('User-Agent', 'None')}")
-                        logger.error(f"   Referer: {headers.get('Referer', 'None')}")
-                        logger.error(f"   Origin: {headers.get('Origin', 'None')}")
+                        logger.error(f"403 BLOCKED by Cloudflare - URL: {url}")
+                        logger.error(f"Response: {error_text[:200]}")
+                        logger.error(f"User-Agent: {headers.get('User-Agent', 'None')}")
                         
                         if attempt == self.config.max_retries - 1:
-                            raise AuthenticationError(f"API request blocked by security policy: HTTP {response.status}")
+                            raise AuthenticationError(f"Cloudflare blocked request: {response.status}")
                     
                     elif response.status == 429:
                         retry_after = response.headers.get('Retry-After', '60')
-                        error_text = await response.text()
-                        logger.warning(f"⏰ 429 Rate Limited: {error_text}")
+                        logger.warning(f"429 Rate Limited - retry after {retry_after}s")
                         raise RateLimitError(f"Rate limit exceeded, retry after {retry_after} seconds")
                     
                     elif response.status == 404:
-                        error_text = await response.text()
-                        logger.warning(f"❌ 404 Not Found: {error_text}")
+                        logger.warning(f"404 Not Found: {endpoint}")
                         raise AuthenticationError(f"API endpoint not found: {endpoint}")
                     
                     else:
                         error_text = await response.text()
-                        logger.warning(f"⚠️ API request failed with status {response.status}: {error_text}")
+                        logger.warning(f"{response.status} Error: {error_text[:100]}")
                         
                         if attempt == self.config.max_retries - 1:
                             raise AuthenticationError(f"API request failed: HTTP {response.status}")
             
             except ClientError as e:
-                logger.warning(f"🌐 API request network error (attempt {attempt + 1}): {e}")
+                logger.warning(f"Network error (attempt {attempt + 1}): {e}")
                 
                 if attempt == self.config.max_retries - 1:
                     raise AuthenticationError(f"API request failed: {e}") from e
@@ -380,7 +367,7 @@ class KickOAuthService:
             # Wait before retry
             if attempt < self.config.max_retries - 1:
                 delay = self.config.retry_delay_seconds * (2 ** attempt)
-                logger.info(f"⏳ Waiting {delay} seconds before retry...")
+                logger.debug(f"Waiting {delay}s before retry...")
                 await asyncio.sleep(delay)
         
         raise AuthenticationError("API request failed after all retries")
