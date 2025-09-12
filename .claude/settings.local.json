@@ -12,7 +12,8 @@
       "Bash(python:*)",
       "Bash(./kick-monitor:*)",
       "Bash(py:*)",
-      "Bash(pg_isready:*)"
+      "Bash(pg_isready:*)",
+      "WebFetch(domain:kick.com)"
     ],
     "deny": [],
     "ask": []

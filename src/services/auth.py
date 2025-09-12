@@ -347,6 +347,79 @@ class KickOAuthService:
         
         raise AuthenticationError("API request failed after all retries")
     
+    async def discover_websocket_config(self) -> Optional[Dict[str, Any]]:
+        """
+        Discover WebSocket configuration from Kick.com API.
+        
+        Returns:
+            Dictionary with WebSocket config or None if not available
+        """
+        logger.info("Discovering WebSocket configuration from Kick.com API")
+        
+        # Try different potential endpoints for WebSocket discovery
+        potential_endpoints = [
+            "/api/v1/websocket/config",
+            "/api/v1/socket/config", 
+            "/api/v1/realtime/config",
+            "/api/v2/websocket/config",
+            "/api/internal/websocket/config"
+        ]
+        
+        for endpoint in potential_endpoints:
+            try:
+                logger.debug(f"Trying WebSocket config endpoint: {endpoint}")
+                response_data = await self.make_authenticated_request("GET", endpoint)
+                
+                if response_data:
+                    logger.info(f"WebSocket config discovered from {endpoint}")
+                    return response_data
+                    
+            except Exception as e:
+                logger.debug(f"WebSocket config endpoint {endpoint} failed: {e}")
+                continue
+        
+        logger.warning("Could not discover WebSocket configuration from any API endpoint")
+        return None
+    
+    async def get_channel_websocket_info(self, channel_username: str) -> Optional[Dict[str, Any]]:
+        """
+        Get WebSocket information for a specific channel.
+        
+        Args:
+            channel_username: The channel username to get WebSocket info for
+            
+        Returns:
+            Dictionary with channel WebSocket info or None if not available
+        """
+        logger.info(f"Getting WebSocket info for channel: {channel_username}")
+        
+        try:
+            # Try channel-specific endpoints
+            endpoints_to_try = [
+                f"/api/v1/channels/{channel_username}/websocket",
+                f"/api/v1/channels/{channel_username}/socket",
+                f"/api/v1/channels/{channel_username}/realtime",
+                f"/api/v2/channels/{channel_username}/websocket"
+            ]
+            
+            for endpoint in endpoints_to_try:
+                try:
+                    logger.debug(f"Trying channel WebSocket endpoint: {endpoint}")
+                    response_data = await self.make_authenticated_request("GET", endpoint)
+                    
+                    if response_data:
+                        logger.info(f"Channel WebSocket info found at {endpoint}")
+                        return response_data
+                        
+                except Exception as e:
+                    logger.debug(f"Channel WebSocket endpoint {endpoint} failed: {e}")
+                    continue
+        
+        except Exception as e:
+            logger.warning(f"Failed to get WebSocket info for channel {channel_username}: {e}")
+        
+        return None
+    
     async def get_channel_info(self, username: str) -> Dict[str, Any]:
         """
         Get channel information for a streamer.

@@ -183,10 +183,10 @@ class ManualModeUI:
             )
             
             # Create components
-            layout["header"] = self._create_header()
-            layout["streamers"] = self._create_streamers_table()
-            layout["stats"] = self._create_stats_panel()
-            layout["footer"] = self._create_footer()
+            layout["header"].update(self._create_header())
+            layout["streamers"].update(self._create_streamers_table())
+            layout["stats"].update(self._create_stats_panel())
+            layout["footer"].update(self._create_footer())
             
             return layout
             

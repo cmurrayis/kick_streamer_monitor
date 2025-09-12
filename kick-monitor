@@ -17,11 +17,32 @@ sys.path.insert(0, str(src_path))
 # Load environment variables from .env file
 try:
     from dotenv import load_dotenv
-    env_file = project_root / ".env"
-    if env_file.exists():
-        load_dotenv(env_file)
+    
+    # Try multiple locations for .env file
+    possible_env_locations = [
+        project_root / ".env",           # Same directory as script
+        Path.cwd() / ".env",             # Current working directory
+        Path("/scripts/kick_streamer_monitor/.env"),  # Absolute path if known
+        Path.home() / ".kick-monitor.env"  # User home directory
+    ]
+    
+    env_loaded = False
+    for env_file in possible_env_locations:
+        if env_file.exists():
+            load_dotenv(env_file)
+            env_loaded = True
+            break
+    
+    # Debug info (remove in production)
+    if not env_loaded:
+        print(f"Warning: No .env file found. Searched:")
+        for loc in possible_env_locations:
+            print(f"  - {loc} (exists: {loc.exists()})")
+        print("Environment variables will be read from system environment.")
+        
 except ImportError:
     # python-dotenv not installed, skip loading
+    print("Warning: python-dotenv not installed. Using system environment variables only.")
     pass
 
 try:

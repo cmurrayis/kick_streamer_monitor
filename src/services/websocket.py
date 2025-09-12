@@ -253,17 +253,66 @@ class KickWebSocketService:
                 logger.error("Maximum reconnection attempts reached")
                 break
     
+    async def _discover_websocket_url(self) -> Optional[str]:
+        """
+        Discover the correct WebSocket URL dynamically from Kick.com API.
+        
+        Returns:
+            WebSocket URL string or None if discovery fails
+        """
+        if not self.oauth_service:
+            logger.warning("No OAuth service available for WebSocket URL discovery")
+            return None
+        
+        try:
+            logger.info("Attempting to discover WebSocket configuration from Kick.com API")
+            
+            # Try to get global WebSocket config
+            websocket_config = await self.oauth_service.discover_websocket_config()
+            if websocket_config:
+                # Extract WebSocket URL from config
+                if 'url' in websocket_config:
+                    return websocket_config['url']
+                elif 'websocket_url' in websocket_config:
+                    return websocket_config['websocket_url']
+                elif 'pusher_url' in websocket_config:
+                    return websocket_config['pusher_url']
+                elif 'endpoint' in websocket_config:
+                    return websocket_config['endpoint']
+            
+            # If global config doesn't work, try to construct from known patterns
+            logger.info("Global WebSocket config not available, trying fallback approach")
+            
+            # Since official WebSocket support isn't available yet, log this limitation
+            logger.warning("Kick.com official API doesn't support WebSocket real-time events yet")
+            logger.warning("WebSocket support is on Kick's roadmap but not currently available")
+            logger.warning("Consider using webhook-based events instead (official method)")
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Failed to discover WebSocket URL: {e}")
+            return None
+    
     async def _connect(self) -> None:
         """Establish WebSocket connection."""
         if self._is_connected or self._is_connecting:
             return
         
         self._is_connecting = True
-        logger.info(f"Connecting to Kick.com WebSocket: {self.config.pusher_url}")
+        
+        # Try to discover WebSocket URL dynamically first
+        websocket_url = await self._discover_websocket_url()
+        if not websocket_url:
+            logger.error("Could not discover WebSocket URL from Kick.com API")
+            self._is_connecting = False
+            raise ConnectionError("WebSocket URL discovery failed")
+        
+        logger.info(f"Connecting to Kick.com WebSocket: {websocket_url}")
         
         try:
             self._websocket = await websockets.connect(
-                self.config.pusher_url,
+                websocket_url,
                 extra_headers={
                     "User-Agent": f"{self.config.client_name}/{self.config.version}"
                 },
