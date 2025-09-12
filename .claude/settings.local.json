@@ -11,7 +11,8 @@
       "Bash(pip install:*)",
       "Bash(python:*)",
       "Bash(./kick-monitor:*)",
-      "Bash(py:*)"
+      "Bash(py:*)",
+      "Bash(pg_isready:*)"
     ],
     "deny": [],
     "ask": []
