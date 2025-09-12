@@ -289,8 +289,8 @@ Report issues at: https://github.com/your-org/kick-monitor/issues
     service_parser.add_argument(
         '--dashboard-host',
         type=str,
-        default='127.0.0.1',
-        help='Web dashboard host (default: 127.0.0.1)'
+        default='0.0.0.0',
+        help='Web dashboard host (default: 0.0.0.0 - all interfaces)'
     )
     
     # stop command

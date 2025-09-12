@@ -52,7 +52,7 @@ class ServiceCommands:
             
             # Web dashboard options (for daemon mode)
             enable_web_dashboard = getattr(args, 'web_dashboard', True) and not getattr(args, 'no_web_dashboard', False)
-            dashboard_host = getattr(args, 'dashboard_host', '127.0.0.1')
+            dashboard_host = getattr(args, 'dashboard_host', '0.0.0.0')
             dashboard_port = getattr(args, 'dashboard_port', 8080)
             log_level = getattr(args, 'log_level', 'INFO')
             browser_fallback = getattr(args, 'browser_fallback', True)

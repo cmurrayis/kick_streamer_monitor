@@ -24,7 +24,7 @@ class WebDashboardService:
     Provides HTTP endpoints and WebSocket for real-time updates.
     """
     
-    def __init__(self, monitor_service, host: str = "127.0.0.1", port: int = 8080):
+    def __init__(self, monitor_service, host: str = "0.0.0.0", port: int = 8080):
         self.monitor_service = monitor_service
         self.host = host
         self.port = port
