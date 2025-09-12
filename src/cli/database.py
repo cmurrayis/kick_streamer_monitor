@@ -15,7 +15,7 @@ from typing import Dict, Any, Optional
 
 from models import ConfigurationDefaults
 from services import DatabaseService, DatabaseConfig
-from lib.logging import setup_logging
+from lib.logging import get_logger
 
 
 class DatabaseCommandError(Exception):
@@ -27,7 +27,7 @@ class DatabaseCommands:
     """Database management CLI commands."""
     
     def __init__(self):
-        self.logger = setup_logging(__name__)
+        self.logger = get_logger(__name__)
     
     async def migrate(self, args: argparse.Namespace) -> int:
         """Run database schema migration."""

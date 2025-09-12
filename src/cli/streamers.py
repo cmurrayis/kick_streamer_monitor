@@ -20,7 +20,7 @@ from services import (
     KickOAuthService, OAuthConfig,
     KickWebSocketService, PusherConfig
 )
-from lib.logging import setup_logging
+from lib.logging import get_logger
 
 
 class StreamerCommandError(Exception):
@@ -32,7 +32,7 @@ class StreamerCommands:
     """Streamer management CLI commands."""
     
     def __init__(self):
-        self.logger = setup_logging(__name__)
+        self.logger = get_logger(__name__)
     
     async def list_streamers(self, args: argparse.Namespace) -> int:
         """List streamers being monitored."""

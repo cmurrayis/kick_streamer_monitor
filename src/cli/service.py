@@ -21,7 +21,7 @@ from services import (
     KickWebSocketService, PusherConfig,
     KickMonitorService, MonitoringMode
 )
-from lib.logging import setup_logging
+from lib.logging import get_logger
 from .manual import run_manual_mode
 
 
@@ -34,7 +34,7 @@ class ServiceCommands:
     """Service management CLI commands."""
     
     def __init__(self):
-        self.logger = setup_logging(__name__)
+        self.logger = get_logger(__name__)
         self._monitor_service: Optional[KickMonitorService] = None
         self._shutdown_requested = False
     
@@ -63,8 +63,10 @@ class ServiceCommands:
             
             print(f"Starting Kick Streamer Monitor in {mode.value} mode...")
             
-            # Setup logging
-            self.logger = setup_logging(__name__, level=log_level.upper())
+            # Setup logging for the service  
+            from lib.logging import setup_logging
+            setup_logging(level=log_level.upper())
+            self.logger = get_logger(__name__)
             
             # Load configurations
             db_config = self._load_database_config(config_file)

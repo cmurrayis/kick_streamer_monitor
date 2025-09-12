@@ -19,7 +19,7 @@ from models import (
     EnvironmentConfigLoader, ConfigurationDefaults
 )
 from services import DatabaseService, DatabaseConfig
-from lib.logging import setup_logging
+from lib.logging import get_logger
 
 
 class ConfigCommandError(Exception):
@@ -31,7 +31,7 @@ class ConfigCommands:
     """Configuration management CLI commands."""
     
     def __init__(self):
-        self.logger = setup_logging(__name__)
+        self.logger = get_logger(__name__)
     
     async def show(self, args: argparse.Namespace) -> int:
         """Show current configuration."""
