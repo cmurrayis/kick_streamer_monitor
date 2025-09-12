@@ -9,7 +9,9 @@
       "WebSearch",
       "Bash(scripts/check-task-prerequisites.sh:*)",
       "Bash(pip install:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(./kick-monitor:*)",
+      "Bash(py:*)"
     ],
     "deny": [],
     "ask": []

@@ -31,7 +31,7 @@ try:
 except ImportError:
     RICH_AVAILABLE = False
 
-from ..services import KickMonitorService
+from services import KickMonitorService
 
 
 class SortMode(str, Enum):

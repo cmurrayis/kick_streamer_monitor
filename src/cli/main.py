@@ -17,7 +17,7 @@ from .config import ConfigCommands
 from .streamers import StreamerCommands  
 from .service import ServiceCommands
 from .database import DatabaseCommands
-from ..lib.logging import setup_logging
+from lib.logging import setup_logging
 
 # Version information
 __version__ = "1.0.0"

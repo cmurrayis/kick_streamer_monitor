@@ -14,13 +14,13 @@ import sys
 from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional, Tuple
 
-from ..models import Streamer, StreamerStatus, StreamerCreate
-from ..services import (
+from models import Streamer, StreamerStatus, StreamerCreate
+from services import (
     DatabaseService, DatabaseConfig,
     KickOAuthService, OAuthConfig,
     KickWebSocketService, PusherConfig
 )
-from ..lib.logging import setup_logging
+from lib.logging import setup_logging
 
 
 class StreamerCommandError(Exception):
@@ -287,7 +287,7 @@ class StreamerCommands:
                 if existing and force:
                     print("Updating existing streamer...")
                     # Update existing streamer
-                    from ..models import StreamerUpdate
+                    from models import StreamerUpdate
                     update = StreamerUpdate(
                         display_name=display_name,
                         status=StreamerStatus.ONLINE if is_live else StreamerStatus.OFFLINE,

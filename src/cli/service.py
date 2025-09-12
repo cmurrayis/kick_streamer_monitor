@@ -14,14 +14,14 @@ import sys
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
-from ..models import ConfigurationDefaults, EnvironmentConfigLoader
-from ..services import (
+from models import ConfigurationDefaults, EnvironmentConfigLoader
+from services import (
     DatabaseService, DatabaseConfig,
     KickOAuthService, OAuthConfig,
     KickWebSocketService, PusherConfig,
     KickMonitorService, MonitoringMode
 )
-from ..lib.logging import setup_logging
+from lib.logging import setup_logging
 from .manual import run_manual_mode
 
 
