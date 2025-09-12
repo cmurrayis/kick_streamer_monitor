@@ -291,7 +291,14 @@ class KickOAuthService:
         # Prepare request
         url = f"{self.config.api_base_url.rstrip('/')}/{endpoint.lstrip('/')}"
         headers = kwargs.pop('headers', {})
-        headers['Authorization'] = f"Bearer {access_token}"
+        headers.update({
+            'Authorization': f"Bearer {access_token}",
+            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/json, text/plain, */*',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Referer': 'https://kick.com/',
+            'Origin': 'https://kick.com'
+        })
         
         # Apply rate limiting
         await self._apply_rate_limiting()
@@ -485,9 +492,9 @@ class KickOAuthService:
                 logger.info(f"Rate limit reached, waiting {wait_time:.1f} seconds")
                 await asyncio.sleep(wait_time)
         
-        # Also ensure minimum time between requests
+        # Also ensure minimum time between requests (more conservative)
         if self._last_request_time:
-            min_interval = 0.1  # 100ms minimum between requests
+            min_interval = 1.0  # 1 second minimum between requests to avoid security policy blocking
             time_since_last = (now - self._last_request_time).total_seconds()
             if time_since_last < min_interval:
                 await asyncio.sleep(min_interval - time_since_last)
