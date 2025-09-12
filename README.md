@@ -34,13 +34,18 @@ Real-time monitoring service that tracks Kick.com streamer online/offline status
    pip install -r requirements.txt
    ```
 
-3. **Configure environment**
+3. **Install the package**
+   ```bash
+   pip install -e .
+   ```
+
+4. **Configure environment**
    ```bash
    cp .env.example .env
    # Edit .env with your Kick.com API credentials and database settings
    ```
 
-4. **Setup database**
+5. **Setup database**
    ```bash
    # Create PostgreSQL database and user
    sudo -u postgres psql
@@ -53,12 +58,12 @@ Real-time monitoring service that tracks Kick.com streamer online/offline status
    kick-monitor db migrate
    ```
 
-5. **Validate configuration**
+6. **Validate configuration**
    ```bash
    kick-monitor config validate
    ```
 
-6. **Start monitoring**
+7. **Start monitoring**
    ```bash
    # Interactive manual mode
    kick-monitor start --manual
