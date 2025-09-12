@@ -6,6 +6,7 @@ with connection pooling, transaction management, and performance optimization.
 """
 
 import asyncio
+import json
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -376,7 +377,7 @@ class DatabaseService:
                     event.kick_event_id,
                     event.event_timestamp,
                     event.received_timestamp,
-                    event.event_data
+                    json.dumps(event.event_data) if event.event_data is not None else None
                 )
                 
                 if not record:
