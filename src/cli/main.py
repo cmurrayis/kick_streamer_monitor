@@ -203,6 +203,12 @@ Report issues at: https://github.com/your-org/kick-monitor/issues
         action='store_true',
         help='Show detailed test results'
     )
+    test_parser.add_argument(
+        '--method',
+        choices=['oauth', 'browser', 'hybrid'],
+        default='hybrid',
+        help='Test method (default: hybrid - OAuth with browser fallback)'
+    )
     
     # streamers add
     add_parser = streamers_subparsers.add_parser(
@@ -245,6 +251,18 @@ Report issues at: https://github.com/your-org/kick-monitor/issues
         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
         default='INFO',
         help='Set logging level (default: INFO)'
+    )
+    service_parser.add_argument(
+        '--browser-fallback',
+        action='store_true',
+        default=True,
+        help='Enable browser fallback for Cloudflare bypass (default: True)'
+    )
+    service_parser.add_argument(
+        '--no-browser-fallback',
+        dest='browser_fallback',
+        action='store_false',
+        help='Disable browser fallback, OAuth only'
     )
     
     # stop command

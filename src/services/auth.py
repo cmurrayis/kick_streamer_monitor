@@ -15,6 +15,13 @@ import aiohttp
 from aiohttp import ClientSession, ClientTimeout, ClientError
 from pydantic import BaseModel, Field
 
+# Import browser client for fallback
+try:
+    from .browser_client import BrowserAPIClient
+    BROWSER_AVAILABLE = True
+except ImportError:
+    BROWSER_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -117,10 +124,10 @@ class KickOAuthService:
     OAuth 2.1 service for Kick.com API authentication.
     
     Implements client credentials flow with automatic token refresh,
-    rate limiting compliance, and error handling.
+    rate limiting compliance, and browser fallback for Cloudflare bypass.
     """
     
-    def __init__(self, config: OAuthConfig):
+    def __init__(self, config: OAuthConfig, enable_browser_fallback: bool = True):
         self.config = config
         self.config.validate()
         
@@ -129,6 +136,12 @@ class KickOAuthService:
         self._token_lock = asyncio.Lock()
         self._last_request_time: Optional[datetime] = None
         self._request_count = 0
+        
+        # Browser fallback configuration
+        self.enable_browser_fallback = enable_browser_fallback and BROWSER_AVAILABLE
+        self._browser_client: Optional[BrowserAPIClient] = None
+        self._oauth_blocked = False  # Track if OAuth is being blocked
+        self._consecutive_oauth_failures = 0
         
         # Rate limiting (adjust based on Kick.com limits)
         self._rate_limit_requests = 100
@@ -160,13 +173,23 @@ class KickOAuthService:
             }
         )
         
-        logger.info("OAuth service started")
+        # Initialize browser fallback if enabled
+        if self.enable_browser_fallback:
+            self._browser_client = BrowserAPIClient(headless=True)
+            await self._browser_client.start()
+            logger.info("OAuth service started with browser fallback")
+        else:
+            logger.info("OAuth service started")
     
     async def close(self) -> None:
         """Close the OAuth service."""
         if self._session:
             await self._session.close()
             self._session = None
+        
+        if self._browser_client:
+            await self._browser_client.close()
+            self._browser_client = None
         
         self._current_token = None
         logger.info("OAuth service closed")
@@ -337,7 +360,12 @@ class KickOAuthService:
                         error_text = await response.text()
                         logger.error(f"403 BLOCKED by Cloudflare - URL: {url}")
                         logger.error(f"Response: {error_text[:200]}")
-                        logger.error(f"User-Agent: {headers.get('User-Agent', 'None')}")
+                        
+                        # Track OAuth blocking
+                        self._consecutive_oauth_failures += 1
+                        if self._consecutive_oauth_failures >= 3:
+                            self._oauth_blocked = True
+                            logger.warning("OAuth consistently blocked, marking for fallback")
                         
                         if attempt == self.config.max_retries - 1:
                             raise AuthenticationError(f"Cloudflare blocked request: {response.status}")
@@ -447,7 +475,7 @@ class KickOAuthService:
     
     async def get_channel_info(self, username: str) -> Dict[str, Any]:
         """
-        Get channel information for a streamer.
+        Get channel information for a streamer with browser fallback.
         
         Args:
             username: Streamer username
@@ -455,7 +483,41 @@ class KickOAuthService:
         Returns:
             Channel information from Kick.com API
         """
-        return await self.make_authenticated_request("GET", f"channels/{username}")
+        # If OAuth is known to be blocked and browser is available, use browser directly
+        if self._oauth_blocked and self.enable_browser_fallback and self._browser_client:
+            logger.debug(f"Using browser fallback for {username} (OAuth blocked)")
+            return await self._get_channel_info_browser(username)
+        
+        # Try OAuth first
+        try:
+            result = await self.make_authenticated_request("GET", f"channels/{username}")
+            # Reset failure counter on success
+            self._consecutive_oauth_failures = 0
+            return result
+            
+        except AuthenticationError as e:
+            if "403" in str(e) or "Cloudflare" in str(e):
+                # OAuth blocked, try browser fallback
+                if self.enable_browser_fallback and self._browser_client:
+                    logger.info(f"OAuth blocked for {username}, trying browser fallback")
+                    return await self._get_channel_info_browser(username)
+                else:
+                    logger.error(f"OAuth blocked for {username}, no browser fallback available")
+                    raise
+            else:
+                # Other auth error, re-raise
+                raise
+    
+    async def _get_channel_info_browser(self, username: str) -> Dict[str, Any]:
+        """Get channel info using browser automation."""
+        if not self._browser_client:
+            raise AuthenticationError("Browser client not initialized")
+        
+        data = await self._browser_client.fetch_channel_data(username)
+        if not data:
+            raise AuthenticationError(f"Browser failed to fetch data for {username}")
+        
+        return data
     
     async def test_authentication(self) -> Dict[str, Any]:
         """
@@ -545,7 +607,13 @@ class KickOAuthService:
             "rate_limit_window": self._rate_limit_window,
             "rate_limit_max": self._rate_limit_requests,
             "last_request_time": self._last_request_time.isoformat() if self._last_request_time else None,
-            "current_token": self.get_token_info()
+            "current_token": self.get_token_info(),
+            "browser_fallback": {
+                "enabled": self.enable_browser_fallback,
+                "available": BROWSER_AVAILABLE,
+                "oauth_blocked": self._oauth_blocked,
+                "consecutive_failures": self._consecutive_oauth_failures
+            }
         }
     
     async def invalidate_token(self) -> None:

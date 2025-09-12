@@ -47,6 +47,7 @@ class ServiceCommands:
             daemon = getattr(args, 'daemon', False)
             manual = getattr(args, 'manual', False)
             log_level = getattr(args, 'log_level', 'INFO')
+            browser_fallback = getattr(args, 'browser_fallback', True)
             
             # Determine monitoring mode
             if dry_run:
@@ -89,7 +90,7 @@ class ServiceCommands:
             print("Initializing services...")
             
             db_service = DatabaseService(db_config)
-            oauth_service = KickOAuthService(oauth_config)
+            oauth_service = KickOAuthService(oauth_config, enable_browser_fallback=browser_fallback)
             websocket_service = KickWebSocketService(pusher_config, oauth_service)
             
             # Test connections before starting

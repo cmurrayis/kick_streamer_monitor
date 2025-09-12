@@ -95,6 +95,7 @@ class StreamerCommands:
             username = args.username
             config_file = getattr(args, 'config', None)
             verbose = getattr(args, 'verbose', False)
+            test_method = getattr(args, 'method', 'hybrid')
             
             print(f"Testing connection to streamer: {username}")
             print("-" * 50)
@@ -139,11 +140,13 @@ class StreamerCommands:
                 test_results['database'] = {'success': False, 'error': 'no_config'}
                 overall_success = False
             
-            # Test 2: Kick.com API lookup
-            print("2. Kick.com API lookup...")
+            # Test 2: API lookup (method based)
+            print(f"2. Kick.com API lookup ({test_method} method)...")
             if oauth_config:
                 try:
-                    oauth_service = KickOAuthService(oauth_config)
+                    # Configure OAuth service based on test method
+                    enable_browser = test_method in ['browser', 'hybrid']
+                    oauth_service = KickOAuthService(oauth_config, enable_browser_fallback=enable_browser)
                     await oauth_service.start()
                     
                     try:
@@ -151,16 +154,31 @@ class StreamerCommands:
                         
                         if channel_info:
                             print(f"   ✓ Found on Kick.com")
+                            
+                            # Show browser fallback status
+                            oauth_stats = oauth_service.get_stats()
+                            browser_info = oauth_stats.get('browser_fallback', {})
+                            if browser_info.get('oauth_blocked'):
+                                print(f"   📡 Using browser fallback (OAuth blocked)")
+                            elif test_method == 'browser':
+                                print(f"   📡 Using browser method")
+                            elif test_method == 'hybrid' and browser_info.get('enabled'):
+                                print(f"   🔄 Hybrid mode ready (OAuth + browser fallback)")
+                            
                             if verbose:
                                 print(f"     - Channel ID: {channel_info.get('id')}")
                                 print(f"     - Display Name: {channel_info.get('user', {}).get('username')}")
                                 print(f"     - Live: {channel_info.get('livestream') is not None}")
+                                if browser_info.get('consecutive_failures', 0) > 0:
+                                    print(f"     - OAuth failures: {browser_info['consecutive_failures']}")
                             
                             test_results['api'] = {
                                 'success': True,
                                 'channel_id': channel_info.get('id'),
                                 'display_name': channel_info.get('user', {}).get('username'),
-                                'is_live': channel_info.get('livestream') is not None
+                                'is_live': channel_info.get('livestream') is not None,
+                                'method_used': 'browser' if browser_info.get('oauth_blocked') else 'oauth',
+                                'browser_fallback_available': browser_info.get('enabled', False)
                             }
                         else:
                             print(f"   ✗ Not found on Kick.com")
