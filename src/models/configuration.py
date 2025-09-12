@@ -10,7 +10,7 @@ import re
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional, Dict, Any, Union, List
-from pydantic import BaseModel, Field, validator, root_validator
+from pydantic import BaseModel, Field, validator, model_validator
 from cryptography.fernet import Fernet
 import base64
 import json
@@ -73,37 +73,41 @@ class ConfigurationBase(BaseModel):
         """Trim description if provided."""
         return v.strip() if v else None
     
-    @root_validator
+    @model_validator(mode='before')
+    @classmethod
     def validate_sensitive_encryption(cls, values):
         """Validate that sensitive values are marked for encryption."""
-        key = values.get('key', '')
-        is_encrypted = values.get('is_encrypted', False)
-        is_sensitive = values.get('is_sensitive', False)
-        
-        # Auto-detect sensitive keys
-        sensitive_keywords = ['secret', 'password', 'token', 'key', 'credential', 'auth']
-        key_lower = key.lower()
-        
-        if any(keyword in key_lower for keyword in sensitive_keywords):
-            values['is_sensitive'] = True
-            values['is_encrypted'] = True
-        
-        # Manual sensitive marking must have encryption
-        if is_sensitive and not is_encrypted:
-            values['is_encrypted'] = True
+        if isinstance(values, dict):
+            key = values.get('key', '')
+            is_encrypted = values.get('is_encrypted', False)
+            is_sensitive = values.get('is_sensitive', False)
+            
+            # Auto-detect sensitive keys
+            sensitive_keywords = ['secret', 'password', 'token', 'key', 'credential', 'auth']
+            key_lower = key.lower()
+            
+            if any(keyword in key_lower for keyword in sensitive_keywords):
+                values['is_sensitive'] = True
+                values['is_encrypted'] = True
+            
+            # Manual sensitive marking must have encryption
+            if is_sensitive and not is_encrypted:
+                values['is_encrypted'] = True
         
         return values
     
-    @root_validator  
+    @model_validator(mode='before')
+    @classmethod
     def validate_category_key_consistency(cls, values):
         """Validate key matches category prefix."""
-        key = values.get('key', '')
-        category = values.get('category')
-        
-        if category and key:
-            expected_prefix = category.value.upper() + '_'
-            if not key.startswith(expected_prefix):
-                raise ValueError(f"Key '{key}' should start with '{expected_prefix}' for category {category.value}")
+        if isinstance(values, dict):
+            key = values.get('key', '')
+            category = values.get('category')
+            
+            if category and key:
+                expected_prefix = category.value.upper() + '_'
+                if not key.startswith(expected_prefix):
+                    raise ValueError(f"Key '{key}' should start with '{expected_prefix}' for category {category.value}")
         
         return values
 

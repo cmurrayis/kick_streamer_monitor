@@ -8,7 +8,7 @@ streamer online/offline status changes.
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional, Dict, Any, Union
-from pydantic import BaseModel, Field, validator, root_validator
+from pydantic import BaseModel, Field, validator, model_validator
 import json
 
 from .streamer import StreamerStatus
@@ -53,46 +53,50 @@ class StatusEventBase(BaseModel):
             raise ValueError("Kick event ID must be a string")
         return v
     
-    @root_validator
+    @model_validator(mode='before')
+    @classmethod
     def validate_timestamp_order(cls, values):
         """Validate timestamp ordering constraints."""
-        event_ts = values.get('event_timestamp')
-        received_ts = values.get('received_timestamp')
-        processed_ts = values.get('processed_timestamp')
-        
-        if received_ts and event_ts and received_ts < event_ts:
-            raise ValueError("Received timestamp cannot be before event timestamp")
-        
-        if processed_ts and received_ts and processed_ts < received_ts:
-            raise ValueError("Processed timestamp cannot be before received timestamp")
-        
-        if processed_ts and event_ts and processed_ts < event_ts:
-            raise ValueError("Processed timestamp cannot be before event timestamp")
+        if isinstance(values, dict):
+            event_ts = values.get('event_timestamp')
+            received_ts = values.get('received_timestamp')
+            processed_ts = values.get('processed_timestamp')
+            
+            if received_ts and event_ts and received_ts < event_ts:
+                raise ValueError("Received timestamp cannot be before event timestamp")
+            
+            if processed_ts and received_ts and processed_ts < received_ts:
+                raise ValueError("Processed timestamp cannot be before received timestamp")
+            
+            if processed_ts and event_ts and processed_ts < event_ts:
+                raise ValueError("Processed timestamp cannot be before event timestamp")
         
         return values
     
-    @root_validator
+    @model_validator(mode='before')
+    @classmethod
     def validate_status_event_consistency(cls, values):
         """Validate event type matches status change."""
-        event_type = values.get('event_type')
-        previous_status = values.get('previous_status')
-        new_status = values.get('new_status')
-        
-        if event_type == EventType.STREAM_START:
-            if new_status != StreamerStatus.ONLINE:
-                raise ValueError("Stream start events must result in online status")
-            if previous_status == StreamerStatus.ONLINE:
-                raise ValueError("Stream start events cannot transition from online status")
-        
-        elif event_type == EventType.STREAM_END:
-            if new_status != StreamerStatus.OFFLINE:
-                raise ValueError("Stream end events must result in offline status")
-            if previous_status == StreamerStatus.OFFLINE:
-                raise ValueError("Stream end events cannot transition from offline status")
-        
-        elif event_type == EventType.CONNECTION_TEST:
-            # Connection test events can have any status transition
-            pass
+        if isinstance(values, dict):
+            event_type = values.get('event_type')
+            previous_status = values.get('previous_status')
+            new_status = values.get('new_status')
+            
+            if event_type == EventType.STREAM_START:
+                if new_status != StreamerStatus.ONLINE:
+                    raise ValueError("Stream start events must result in online status")
+                if previous_status == StreamerStatus.ONLINE:
+                    raise ValueError("Stream start events cannot transition from online status")
+            
+            elif event_type == EventType.STREAM_END:
+                if new_status != StreamerStatus.OFFLINE:
+                    raise ValueError("Stream end events must result in offline status")
+                if previous_status == StreamerStatus.OFFLINE:
+                    raise ValueError("Stream end events cannot transition from offline status")
+            
+            elif event_type == EventType.CONNECTION_TEST:
+                # Connection test events can have any status transition
+                pass
         
         return values
 
@@ -290,13 +294,15 @@ class StatusEventQuery(BaseModel):
             raise ValueError("Offset must be non-negative")
         return v
     
-    @root_validator
+    @model_validator(mode='before')
+    @classmethod
     def validate_timestamp_range(cls, values):
         """Validate timestamp range if both provided."""
-        after = values.get('after_timestamp')
-        before = values.get('before_timestamp')
-        
-        if after and before and after >= before:
-            raise ValueError("after_timestamp must be before before_timestamp")
+        if isinstance(values, dict):
+            after = values.get('after_timestamp')
+            before = values.get('before_timestamp')
+            
+            if after and before and after >= before:
+                raise ValueError("after_timestamp must be before before_timestamp")
         
         return values
