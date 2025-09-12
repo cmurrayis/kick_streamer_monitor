@@ -57,8 +57,11 @@ Repository = "https://github.com/example/kick-monitor"
 Issues = "https://github.com/example/kick-monitor/issues"
 
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["src*"]
+where = ["src"]
+include = ["*"]
+
+[tool.setuptools.package-dir]
+"" = "src"
 
 [tool.black]
 line-length = 88
