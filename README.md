@@ -45,8 +45,6 @@ Real-time monitoring service that tracks Kick.com streamer online/offline status
    # Edit .env with your Kick.com API credentials and database settings
    ```
 
-   **Important**: Always use `--config .env` flag when running CLI commands to ensure environment variables are loaded correctly.
-
 5. **Setup database**
    ```bash
    # Create PostgreSQL database and user
@@ -57,12 +55,12 @@ Real-time monitoring service that tracks Kick.com streamer online/offline status
    \q
    
    # Initialize database schema
-   kick-monitor --config .env db migrate
+   kick-monitor db migrate
    ```
 
 6. **Validate configuration**
    ```bash
-   kick-monitor --config .env config validate
+   kick-monitor config validate
    ```
 
 7. **Start monitoring**
@@ -145,9 +143,9 @@ kick-monitor config validate          # Validate configuration
 kick-monitor config generate-template # Create .env.example
 
 # Database management
-kick-monitor --config .env db migrate    # Run database migrations
-kick-monitor --config .env db health     # Check database connection
-kick-monitor --config .env db backup     # Create database backup
+kick-monitor db migrate    # Run database migrations
+kick-monitor db health     # Check database connection
+kick-monitor db backup     # Create database backup
 
 # Streamer management
 kick-monitor streamers list          # List monitored streamers
@@ -485,7 +483,7 @@ volumes:
 curl http://localhost:8080/health
 
 # CLI health check
-kick-monitor --config .env db health
+kick-monitor db health
 kick-monitor status
 ```
 
@@ -525,10 +523,10 @@ The application exports metrics for monitoring:
    psql -h localhost -U kick_monitor_user -d kick_monitor
    
    # Verify configuration
-   kick-monitor --config .env config validate
+   kick-monitor config validate
    
    # Test database connection specifically
-   kick-monitor --config .env db health
+   kick-monitor db health
    ```
 
 2. **API Authentication Errors**
@@ -557,7 +555,7 @@ The application exports metrics for monitoring:
    htop
    
    # Check database performance
-   kick-monitor --config .env db health
+   kick-monitor db health
    
    # Review configuration
    kick-monitor config show

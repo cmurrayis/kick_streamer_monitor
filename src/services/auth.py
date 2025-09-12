@@ -91,7 +91,7 @@ class OAuthConfig:
         self.client_secret = client_secret
         self.token_url = token_url
         self.api_base_url = api_base_url
-        self.scopes = scopes or ["user:read", "channel:read"]
+        self.scopes = scopes or []
         self.timeout_seconds = timeout_seconds
         self.max_retries = max_retries
         self.retry_delay_seconds = retry_delay_seconds
@@ -204,9 +204,12 @@ class KickOAuthService:
         data = {
             "grant_type": "client_credentials",
             "client_id": self.config.client_id,
-            "client_secret": self.config.client_secret,
-            "scope": " ".join(self.config.scopes)
+            "client_secret": self.config.client_secret
         }
+        
+        # Only include scope if scopes are specified
+        if self.config.scopes:
+            data["scope"] = " ".join(self.config.scopes)
         
         # Apply rate limiting
         await self._apply_rate_limiting()
