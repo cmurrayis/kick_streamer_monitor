@@ -7,7 +7,7 @@ Represents a Kick.com content creator being monitored for online/offline status 
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional, Dict, Any
-from pydantic import BaseModel, Field, validator, root_validator
+from pydantic import BaseModel, Field, validator, model_validator
 
 
 class StreamerStatus(str, Enum):
@@ -76,14 +76,16 @@ class StreamerBase(BaseModel):
             raise ValueError("Last status update cannot be in the future")
         return v
     
-    @root_validator
+    @model_validator(mode='before')
+    @classmethod
     def validate_status_consistency(cls, values):
         """Validate status and timestamp consistency."""
-        status = values.get('status')
-        last_seen_online = values.get('last_seen_online')
-        
-        if status == StreamerStatus.ONLINE and last_seen_online is None:
-            values['last_seen_online'] = datetime.now(timezone.utc)
+        if isinstance(values, dict):
+            status = values.get('status')
+            last_seen_online = values.get('last_seen_online')
+            
+            if status == StreamerStatus.ONLINE and last_seen_online is None:
+                values['last_seen_online'] = datetime.now(timezone.utc)
         
         return values
 
@@ -131,18 +133,20 @@ class StreamerStatusUpdate(BaseModel):
             raise ValueError("Status change timestamp cannot be in the future")
         return v or datetime.now(timezone.utc)
     
-    @root_validator
+    @model_validator(mode='before')
+    @classmethod
     def validate_status_transition(cls, values):
         """Validate the status transition is allowed."""
-        previous_status = values.get('previous_status')
-        new_status = values.get('new_status')
-        
-        if previous_status and not StreamerStateTransition.is_valid_transition(previous_status, new_status):
-            valid_transitions = StreamerStateTransition.get_valid_transitions(previous_status)
-            raise ValueError(
-                f"Invalid status transition from {previous_status} to {new_status}. "
-                f"Valid transitions: {[t.value for t in valid_transitions]}"
-            )
+        if isinstance(values, dict):
+            previous_status = values.get('previous_status')
+            new_status = values.get('new_status')
+            
+            if previous_status and not StreamerStateTransition.is_valid_transition(previous_status, new_status):
+                valid_transitions = StreamerStateTransition.get_valid_transitions(previous_status)
+                raise ValueError(
+                    f"Invalid status transition from {previous_status} to {new_status}. "
+                    f"Valid transitions: {[t.value for t in valid_transitions]}"
+                )
         
         return values
 
