@@ -49,7 +49,7 @@ test = [
 ]
 
 [project.scripts]
-kick-monitor = "src.cli.main:main"
+kick-monitor = "cli.main:main"
 
 [project.urls]
 Homepage = "https://github.com/example/kick-monitor"
@@ -58,7 +58,6 @@ Issues = "https://github.com/example/kick-monitor/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["*"]
 
 [tool.setuptools.package-dir]
 "" = "src"
