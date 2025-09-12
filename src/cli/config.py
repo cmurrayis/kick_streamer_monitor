@@ -14,12 +14,12 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List
 import yaml
 
-from ..models import (
+from models import (
     Configuration, ConfigurationCreate, ConfigCategory, ConfigurationType,
     EnvironmentConfigLoader, ConfigurationDefaults
 )
-from ..services import DatabaseService, DatabaseConfig
-from ..lib.logging import setup_logging
+from services import DatabaseService, DatabaseConfig
+from lib.logging import setup_logging
 
 
 class ConfigCommandError(Exception):
