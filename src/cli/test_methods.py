@@ -6,25 +6,34 @@ import asyncio
 import sys
 import os
 from pathlib import Path
+from dotenv import load_dotenv
 
-# Add src to Python path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Add project root to Python path
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+sys.path.insert(0, str(project_root / "src"))
 
-from services.auth import KickOAuthService, OAuthConfig
-from services.browser_client import BrowserAPIClient
-from services.hybrid_monitor import HybridMonitorService
-from services.database import DatabaseService, DatabaseConfig
-from lib.config import load_config
+# Load environment variables
+load_dotenv()
+
+from src.services.auth import KickOAuthService, OAuthConfig
+from src.services.browser_client import BrowserAPIClient
 
 async def test_oauth_method(username: str):
     """Test OAuth method specifically."""
     print(f"\n=== Testing OAuth Method for {username} ===")
     
-    config = load_config()
+    # Get credentials from environment
+    client_id = os.getenv('KICK_CLIENT_ID')
+    client_secret = os.getenv('KICK_CLIENT_SECRET')
+    
+    if not client_id or not client_secret:
+        print("   ✗ Missing KICK_CLIENT_ID or KICK_CLIENT_SECRET in environment")
+        return False
     
     oauth_config = OAuthConfig(
-        client_id=config.kick_client_id,
-        client_secret=config.kick_client_secret
+        client_id=client_id,
+        client_secret=client_secret
     )
     
     async with KickOAuthService(oauth_config) as oauth_service:
