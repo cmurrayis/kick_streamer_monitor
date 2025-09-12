@@ -16,7 +16,7 @@ import asyncpg
 from asyncpg import Pool, Connection, Record
 from asyncpg.pool import PoolConnectionProxy
 
-from ..models import (
+from models import (
     Streamer, StreamerCreate, StreamerUpdate, StreamerStatusUpdate, StreamerStatus,
     StatusEvent, StatusEventCreate, StatusEventUpdate, StatusEventQuery, EventType,
     Configuration, ConfigurationCreate, ConfigurationUpdate, ConfigCategory

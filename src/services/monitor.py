@@ -11,7 +11,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List, Optional, Set, Callable
 from enum import Enum
 
-from ..models import (
+from models import (
     Streamer, StreamerStatus, StreamerStatusUpdate,
     StatusEvent, StatusEventCreate, EventType,
     Configuration
@@ -534,7 +534,7 @@ class KickMonitorService:
             if existing:
                 streamer = existing
             else:
-                from ..models import StreamerCreate
+                from models import StreamerCreate
                 streamer_create = StreamerCreate(
                     kick_user_id=kick_user_id,
                     username=username,
