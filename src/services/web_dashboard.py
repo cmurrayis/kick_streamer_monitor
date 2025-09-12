@@ -55,7 +55,6 @@ class WebDashboardService:
             self.app.router.add_get('/api/status', self._handle_api_status)
             self.app.router.add_get('/api/streamers', self._handle_api_streamers)
             self.app.router.add_get('/ws', self._handle_websocket)
-            self.app.router.add_static('/static', self._get_static_path(), name='static')
             
             # Start server
             self.runner = web.AppRunner(self.app)
@@ -210,11 +209,6 @@ class WebDashboardService:
                 logger.error(f"Error broadcasting updates: {e}")
                 await asyncio.sleep(5)
     
-    def _get_static_path(self) -> str:
-        """Get path for static files."""
-        # In a real implementation, this would point to a static directory
-        import os
-        return os.path.join(os.path.dirname(__file__), '..', 'web', 'static')
     
     def _get_dashboard_html(self) -> str:
         """Generate the dashboard HTML page."""
