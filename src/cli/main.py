@@ -413,7 +413,9 @@ async def run_command(args: argparse.Namespace) -> int:
         log_level = logging.INFO
     
     # Setup logging
-    logger = setup_logging('kick-monitor', level=log_level)
+    level_name = logging.getLevelName(log_level)
+    setup_logging(level=level_name)
+    logger = logging.getLogger('kick-monitor')
     
     try:
         # Route to appropriate command handler
