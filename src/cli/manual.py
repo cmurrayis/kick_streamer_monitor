@@ -9,6 +9,9 @@ Kick streamer monitoring service.
 import asyncio
 import logging
 import sys
+import select
+import termios
+import tty
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List, Optional, Tuple
 from enum import Enum
@@ -76,6 +79,7 @@ class ManualModeUI:
         self._show_help = False
         self._max_streamers_display = 25
         self._start_time = datetime.now(timezone.utc)
+        self._force_refresh = False  # Flag for immediate refresh
         
         # Statistics tracking
         self._update_count = 0
@@ -85,6 +89,7 @@ class ManualModeUI:
         # Input handling
         self._input_queue: asyncio.Queue = asyncio.Queue()
         self._shutdown_requested = False
+        self._original_terminal_settings = None
     
     async def run(self) -> int:
         """Run the manual mode UI."""
@@ -100,27 +105,46 @@ class ManualModeUI:
             # Start keyboard input handler
             self._keyboard_input_task = asyncio.create_task(self._keyboard_input_handler())
             
-            # Run main UI loop with Live display
+            # Run main UI loop with Live display - optimized for smooth updates
             with Live(
                 self._create_display(),
-                refresh_per_second=1/self._refresh_rate,
+                refresh_per_second=4,  # Higher refresh rate for smoother visuals
                 console=self.console,
-                screen=False,
-                auto_refresh=True
+                screen=True,  # Use alternate screen buffer to prevent flickering
+                auto_refresh=False  # Manual control for better performance
             ) as live:
+                
+                # Cache for detecting changes to minimize unnecessary updates
+                last_display_hash = None
+                update_interval = self._refresh_rate
                 
                 while self._running and not self._shutdown_requested:
                     try:
-                        # Update display
-                        live.update(self._create_display())
-                        self._update_count += 1
-                        self._last_update = datetime.now(timezone.utc)
+                        # Create new display content
+                        new_display = self._create_display()
                         
-                        # Check for keyboard input
+                        # Simple hash to detect if display actually changed
+                        display_str = str(new_display)
+                        display_hash = hash(display_str)
+                        
+                        # Only update if content actually changed or forced refresh
+                        if (display_hash != last_display_hash or 
+                            self._force_refresh or 
+                            (datetime.now(timezone.utc) - self._last_update).total_seconds() >= update_interval):
+                            
+                            live.update(new_display)
+                            live.refresh()  # Explicit refresh for immediate update
+                            
+                            self._update_count += 1
+                            self._last_update = datetime.now(timezone.utc)
+                            last_display_hash = display_hash
+                            self._force_refresh = False
+                        
+                        # Process keyboard input (non-blocking)
                         await self._process_keyboard_input()
                         
-                        # Wait for next refresh
-                        await asyncio.sleep(self._refresh_rate)
+                        # Shorter sleep for better responsiveness
+                        await asyncio.sleep(0.1)  # 100ms for better keyboard response
                         
                     except KeyboardInterrupt:
                         break
@@ -444,11 +468,42 @@ class ManualModeUI:
             )
     
     async def _keyboard_input_handler(self) -> None:
-        """Handle keyboard input asynchronously."""
+        """Handle keyboard input asynchronously using non-blocking stdin."""
         try:
-            # In a real implementation, this would use a proper async keyboard input library
-            # For now, we'll simulate with a simple approach
-            pass
+            # Save original terminal settings
+            if sys.stdin.isatty():
+                self._original_terminal_settings = termios.tcgetattr(sys.stdin)
+                tty.setraw(sys.stdin.fileno())
+            
+            loop = asyncio.get_event_loop()
+            
+            while self._running and not self._shutdown_requested:
+                try:
+                    # Check if input is available without blocking
+                    if sys.stdin.isatty() and select.select([sys.stdin], [], [], 0)[0]:
+                        char = sys.stdin.read(1)
+                        if char:
+                            # Put the character in the queue for processing
+                            await self._input_queue.put(char)
+                    
+                    # Small sleep to prevent busy waiting
+                    await asyncio.sleep(0.05)
+                    
+                except (OSError, IOError) as e:
+                    # Terminal might not support non-blocking input
+                    self.logger.debug(f"Keyboard input not available: {e}")
+                    break
+                except Exception as e:
+                    self.logger.error(f"Keyboard input error: {e}")
+                    break
+            
+            # Restore terminal settings
+            if self._original_terminal_settings and sys.stdin.isatty():
+                try:
+                    termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self._original_terminal_settings)
+                except:
+                    pass
+                    
         except Exception as e:
             self.logger.error(f"Keyboard input handler error: {e}")
     
@@ -474,8 +529,8 @@ class ManualModeUI:
                 self._shutdown_requested = True
                 
             elif key == 'r':
-                # Force refresh (already happens every cycle)
-                pass
+                # Force immediate refresh
+                self._force_refresh = True
                 
             elif key == 's':
                 # Sort by status
@@ -484,6 +539,7 @@ class ManualModeUI:
                 else:
                     self._sort_mode = SortMode.STATUS
                     self._reverse_sort = False
+                self._force_refresh = True  # Immediate visual feedback
                     
             elif key == 'u':
                 # Sort by username
@@ -492,6 +548,7 @@ class ManualModeUI:
                 else:
                     self._sort_mode = SortMode.USERNAME
                     self._reverse_sort = False
+                self._force_refresh = True  # Immediate visual feedback
                     
             elif key == 't':
                 # Sort by time (last seen)
@@ -500,18 +557,22 @@ class ManualModeUI:
                 else:
                     self._sort_mode = SortMode.LAST_SEEN
                     self._reverse_sort = False
+                self._force_refresh = True  # Immediate visual feedback
                     
             elif key in ['h', '?']:
                 # Toggle help
                 self._show_help = not self._show_help
+                self._force_refresh = True  # Immediate visual feedback
                 
             elif key == '+':
                 # Increase refresh rate (decrease interval)
                 self._refresh_rate = max(0.5, self._refresh_rate - 0.5)
+                self._force_refresh = True  # Show new rate immediately
                 
             elif key == '-':
                 # Decrease refresh rate (increase interval)
                 self._refresh_rate = min(10.0, self._refresh_rate + 0.5)
+                self._force_refresh = True  # Show new rate immediately
                 
         except Exception as e:
             self.logger.error(f"Key handling error: {e}")
@@ -548,6 +609,13 @@ class ManualModeUI:
         """Gracefully shutdown the UI."""
         try:
             self._running = False
+            
+            # Restore terminal settings before shutdown
+            if self._original_terminal_settings and sys.stdin.isatty():
+                try:
+                    termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self._original_terminal_settings)
+                except:
+                    pass
             
             # Cancel keyboard input task
             if self._keyboard_input_task:
