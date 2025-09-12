@@ -54,7 +54,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "kick-monitor=src.cli.main:main",
+            "kick-monitor=cli.main:main",
         ],
     },
     classifiers=[
