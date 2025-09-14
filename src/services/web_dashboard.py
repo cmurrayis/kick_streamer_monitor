@@ -2252,6 +2252,35 @@ class WebDashboardService:
             color: #00ff00;
             font-family: 'Courier New', monospace;
         }}
+        .searchable-select {{
+            position: relative;
+        }}
+        .searchable-select input {{
+            margin-bottom: 5px;
+        }}
+        .dropdown-list {{
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #0a0a0a;
+            border: 1px solid #00ff00;
+            border-top: none;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+        }}
+        .dropdown-item {{
+            padding: 8px;
+            cursor: pointer;
+            border-bottom: 1px solid #003300;
+        }}
+        .dropdown-item:hover {{
+            background: #003300;
+        }}
+        .dropdown-item:last-child {{
+            border-bottom: none;
+        }}
         .add-btn {{
             background: #003300;
             border: 1px solid #00ff00;
@@ -2468,10 +2497,14 @@ class WebDashboardService:
                             </div>
                             <div class="form-group">
                                 <label for="assign_streamer_id">Streamer:</label>
-                                <select id="assign_streamer_id" name="streamer_id" required>
-                                    <option value="">Select Streamer</option>
-                                    {streamer_options}
-                                </select>
+                                <div class="searchable-select">
+                                    <input type="text" id="streamer_search" placeholder="Search streamers..." autocomplete="off">
+                                    <select id="assign_streamer_id" name="streamer_id" required>
+                                        <option value="">Select Streamer</option>
+                                        {streamer_options}
+                                    </select>
+                                    <div id="streamer_dropdown" class="dropdown-list" style="display: none;"></div>
+                                </div>
                             </div>
                             <button type="submit" class="add-btn">ASSIGN</button>
                         </div>
@@ -2669,9 +2702,11 @@ class WebDashboardService:
                 
                 if (response.ok) {{
                     const summary = await response.json();
+                    console.log('Assignment summary loaded:', summary);
                     
                     summary.forEach(userSummary => {{
                         const cell = document.getElementById(`assignments-${{userSummary.user_id}}`);
+                        console.log(`Looking for cell: assignments-${{userSummary.user_id}}, found:`, cell);
                         if (cell) {{
                             if (userSummary.streamers.length === 0) {{
                                 cell.innerHTML = '<span style="color: #888;">None</span>';
@@ -2681,8 +2716,14 @@ class WebDashboardService:
                                 ).join('');
                                 cell.innerHTML = tags;
                             }}
+                        }} else {{
+                            console.warn(`Cell not found for user ${{userSummary.user_id}}`);
                         }}
                     }});
+                }} else {{
+                    console.error('Failed to load assignment summary:', response.status, response.statusText);
+                    const text = await response.text();
+                    console.error('Response body:', text);
                 }}
             }} catch (error) {{
                 console.error('Error loading assignment counts:', error);
@@ -2736,23 +2777,107 @@ class WebDashboardService:
                     assignStreamerSelect.innerHTML = '<option value="">Select Streamer</option>' + streamerOptions;
                 }}
 
+                // Update search functionality with streamers data
+                if (typeof window.updateStreamerData === 'function') {{
+                    window.updateStreamerData(streamers);
+                }}
+
             }} catch (error) {{
                 console.error('Error refreshing dropdowns:', error);
             }}
         }}
 
-        // Check for successful user creation and refresh
+        // Check for successful operations and refresh
         const urlParams = new URLSearchParams(window.location.search);
         const success = urlParams.get('success');
         if (success === 'added') {{
             // User was just created, refresh the dropdowns
             setTimeout(refreshDropdowns, 500);
+        }} else if (success === 'assigned' || success === 'unassigned') {{
+            // Assignment was modified, refresh everything
+            setTimeout(() => {{
+                refreshDropdowns();
+                loadAssignmentMatrix();
+                loadUserAssignmentCounts();
+            }}, 500);
+        }}
+
+        // Searchable dropdown functionality
+        function initializeSearchableDropdown() {{
+            const searchInput = document.getElementById('streamer_search');
+            const selectElement = document.getElementById('assign_streamer_id');
+            const dropdownList = document.getElementById('streamer_dropdown');
+            
+            let allStreamers = [];
+            
+            // Store all streamers when dropdown is refreshed
+            window.updateStreamerData = function(streamers) {{
+                allStreamers = streamers;
+            }};
+            
+            searchInput.addEventListener('input', function() {{
+                const searchTerm = this.value.toLowerCase();
+                
+                if (searchTerm.length === 0) {{
+                    dropdownList.style.display = 'none';
+                    return;
+                }}
+                
+                const filtered = allStreamers.filter(streamer => 
+                    streamer.username.toLowerCase().includes(searchTerm)
+                );
+                
+                if (filtered.length === 0) {{
+                    dropdownList.innerHTML = '<div class="dropdown-item">No streamers found</div>';
+                }} else {{
+                    dropdownList.innerHTML = filtered.map(streamer => 
+                        `<div class="dropdown-item" data-value="${{streamer.id}}" data-text="${{streamer.username}}">
+                            ${{streamer.username}}
+                        </div>`
+                    ).join('');
+                }}
+                
+                dropdownList.style.display = 'block';
+            }});
+            
+            // Handle dropdown item clicks
+            dropdownList.addEventListener('click', function(e) {{
+                if (e.target.classList.contains('dropdown-item') && e.target.dataset.value) {{
+                    const value = e.target.dataset.value;
+                    const text = e.target.dataset.text;
+                    
+                    selectElement.value = value;
+                    searchInput.value = text;
+                    dropdownList.style.display = 'none';
+                }}
+            }});
+            
+            // Hide dropdown when clicking outside
+            document.addEventListener('click', function(e) {{
+                if (!e.target.closest('.searchable-select')) {{
+                    dropdownList.style.display = 'none';
+                }}
+            }});
+            
+            // Show dropdown on focus
+            searchInput.addEventListener('focus', function() {{
+                if (this.value.length > 0 && allStreamers.length > 0) {{
+                    const searchTerm = this.value.toLowerCase();
+                    const filtered = allStreamers.filter(streamer => 
+                        streamer.username.toLowerCase().includes(searchTerm)
+                    );
+                    if (filtered.length > 0) {{
+                        dropdownList.style.display = 'block';
+                    }}
+                }}
+            }});
         }}
 
         // Initialize on page load
         refreshDropdowns();
         loadAssignmentMatrix();
         loadUserAssignmentCounts();
+        initializeSearchableDropdown();
     </script>
 </body>
 </html>'''
