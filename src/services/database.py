@@ -22,6 +22,10 @@ from models import (
     StatusEvent, StatusEventCreate, StatusEventUpdate, StatusEventQuery, EventType,
     Configuration, ConfigurationCreate, ConfigurationUpdate, ConfigCategory
 )
+from models.user import (
+    User, UserCreate, UserUpdate, UserRole, UserStatus,
+    UserStreamerAssignment, UserStreamerAssignmentCreate
+)
 
 logger = logging.getLogger(__name__)
 
@@ -653,3 +657,251 @@ class DatabaseService:
             stats["database_size"] = db_size
             
             return stats
+    
+    # =========================================================================
+    # USER OPERATIONS  
+    # =========================================================================
+    
+    async def create_user(self, user_create: UserCreate) -> Optional[User]:
+        """Create a new user account."""
+        async with self.transaction() as conn:
+            try:
+                # Hash password
+                import hashlib
+                password_hash = hashlib.sha256((user_create.password + "kick_monitor_salt").encode()).hexdigest()
+                
+                query = """
+                INSERT INTO users (username, email, display_name, password_hash, role, status)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                RETURNING id, username, email, display_name, role, status, 
+                         created_at, updated_at, last_login
+                """
+                
+                record = await conn.fetchrow(
+                    query,
+                    user_create.username,
+                    user_create.email,
+                    user_create.display_name,
+                    password_hash,
+                    user_create.role.value,
+                    UserStatus.ACTIVE.value
+                )
+                
+                if not record:
+                    raise DatabaseError("Failed to create user record")
+                
+                user_dict = dict(record)
+                user_dict['password_hash'] = password_hash
+                return User(**user_dict)
+                
+            except asyncpg.UniqueViolationError as e:
+                if "username" in str(e):
+                    raise DatabaseError(f"Username '{user_create.username}' already exists")
+                elif "email" in str(e):
+                    raise DatabaseError(f"Email '{user_create.email}' already registered")
+                else:
+                    raise DatabaseError(f"Unique constraint violation: {e}") from e
+            except Exception as e:
+                logger.error(f"Error creating user: {e}")
+                raise DatabaseError(f"Failed to create user: {e}") from e
+    
+    async def get_user_by_id(self, user_id: int) -> Optional[User]:
+        """Get user by ID."""
+        async with self.get_connection() as conn:
+            query = """
+            SELECT id, username, email, display_name, password_hash, role, status,
+                   created_at, updated_at, last_login
+            FROM users WHERE id = $1
+            """
+            
+            record = await conn.fetchrow(query, user_id)
+            return User(**dict(record)) if record else None
+    
+    async def get_user_by_username(self, username: str) -> Optional[User]:
+        """Get user by username."""
+        async with self.get_connection() as conn:
+            query = """
+            SELECT id, username, email, display_name, password_hash, role, status,
+                   created_at, updated_at, last_login
+            FROM users WHERE username = $1
+            """
+            
+            record = await conn.fetchrow(query, username)
+            return User(**dict(record)) if record else None
+    
+    async def get_user_by_email(self, email: str) -> Optional[User]:
+        """Get user by email."""
+        async with self.get_connection() as conn:
+            query = """
+            SELECT id, username, email, display_name, password_hash, role, status,
+                   created_at, updated_at, last_login
+            FROM users WHERE email = $1
+            """
+            
+            record = await conn.fetchrow(query, email)
+            return User(**dict(record)) if record else None
+    
+    async def get_all_users(self) -> List[User]:
+        """Get all users."""
+        async with self.get_connection() as conn:
+            query = """
+            SELECT id, username, email, display_name, password_hash, role, status,
+                   created_at, updated_at, last_login
+            FROM users ORDER BY username
+            """
+            
+            records = await conn.fetch(query)
+            return [User(**dict(record)) for record in records]
+    
+    async def update_user(self, user_id: int, update: UserUpdate) -> Optional[User]:
+        """Update user account."""
+        update_fields = []
+        values = []
+        param_count = 1
+        
+        # Build dynamic update query
+        for field, value in update.dict(exclude_unset=True).items():
+            if field == 'role' and isinstance(value, UserRole):
+                update_fields.append(f"{field} = ${param_count}")
+                values.append(value.value)
+            elif field == 'status' and isinstance(value, UserStatus):
+                update_fields.append(f"{field} = ${param_count}")
+                values.append(value.value)
+            else:
+                update_fields.append(f"{field} = ${param_count}")
+                values.append(value)
+            param_count += 1
+        
+        if not update_fields:
+            # No fields to update
+            return await self.get_user_by_id(user_id)
+        
+        # Add updated_at
+        update_fields.append(f"updated_at = ${param_count}")
+        values.append(datetime.now(timezone.utc))
+        param_count += 1
+        
+        # Add user_id for WHERE clause
+        values.append(user_id)
+        
+        async with self.transaction() as conn:
+            query = f"""
+            UPDATE users 
+            SET {', '.join(update_fields)}
+            WHERE id = ${param_count}
+            RETURNING id, username, email, display_name, password_hash, role, status,
+                     created_at, updated_at, last_login
+            """
+            
+            record = await conn.fetchrow(query, *values)
+            return User(**dict(record)) if record else None
+    
+    async def update_user_last_login(self, user_id: int) -> None:
+        """Update user's last login timestamp."""
+        async with self.transaction() as conn:
+            query = """
+            UPDATE users 
+            SET last_login = $1, updated_at = $1
+            WHERE id = $2
+            """
+            await conn.execute(query, datetime.now(timezone.utc), user_id)
+    
+    async def delete_user(self, user_id: int) -> bool:
+        """Delete user account (and cascade assignments)."""
+        async with self.transaction() as conn:
+            query = "DELETE FROM users WHERE id = $1"
+            result = await conn.execute(query, user_id)
+            return result == "DELETE 1"
+    
+    # =========================================================================
+    # USER-STREAMER ASSIGNMENT OPERATIONS  
+    # =========================================================================
+    
+    async def create_user_streamer_assignment(self, assignment: UserStreamerAssignmentCreate, 
+                                            assigned_by: Optional[int] = None) -> Optional[UserStreamerAssignment]:
+        """Create user-streamer assignment."""
+        async with self.transaction() as conn:
+            try:
+                query = """
+                INSERT INTO user_streamer_assignments (user_id, streamer_id, assigned_by)
+                VALUES ($1, $2, $3)
+                RETURNING id, user_id, streamer_id, assigned_at, assigned_by
+                """
+                
+                record = await conn.fetchrow(
+                    query,
+                    assignment.user_id,
+                    assignment.streamer_id,
+                    assigned_by
+                )
+                
+                if not record:
+                    raise DatabaseError("Failed to create assignment record")
+                
+                return UserStreamerAssignment(**dict(record))
+                
+            except asyncpg.UniqueViolationError:
+                raise DatabaseError("User already assigned to this streamer")
+            except asyncpg.ForeignKeyViolationError as e:
+                if "user_id" in str(e):
+                    raise DatabaseError("User not found")
+                elif "streamer_id" in str(e):
+                    raise DatabaseError("Streamer not found")
+                else:
+                    raise DatabaseError(f"Foreign key violation: {e}") from e
+            except Exception as e:
+                logger.error(f"Error creating assignment: {e}")
+                raise DatabaseError(f"Failed to create assignment: {e}") from e
+    
+    async def get_user_streamer_assignments(self, user_id: int) -> List[UserStreamerAssignment]:
+        """Get all streamer assignments for a user."""
+        async with self.get_connection() as conn:
+            query = """
+            SELECT id, user_id, streamer_id, assigned_at, assigned_by
+            FROM user_streamer_assignments 
+            WHERE user_id = $1
+            ORDER BY assigned_at DESC
+            """
+            
+            records = await conn.fetch(query, user_id)
+            return [UserStreamerAssignment(**dict(record)) for record in records]
+    
+    async def get_streamer_user_assignments(self, streamer_id: int) -> List[UserStreamerAssignment]:
+        """Get all user assignments for a streamer."""
+        async with self.get_connection() as conn:
+            query = """
+            SELECT id, user_id, streamer_id, assigned_at, assigned_by
+            FROM user_streamer_assignments 
+            WHERE streamer_id = $1
+            ORDER BY assigned_at DESC
+            """
+            
+            records = await conn.fetch(query, streamer_id)
+            return [UserStreamerAssignment(**dict(record)) for record in records]
+    
+    async def delete_user_streamer_assignment(self, user_id: int, streamer_id: int) -> bool:
+        """Remove user-streamer assignment."""
+        async with self.transaction() as conn:
+            query = """
+            DELETE FROM user_streamer_assignments 
+            WHERE user_id = $1 AND streamer_id = $2
+            """
+            result = await conn.execute(query, user_id, streamer_id)
+            return result == "DELETE 1"
+    
+    async def get_users_with_streamer_assignments(self) -> List[Dict[str, Any]]:
+        """Get all users with their assigned streamer counts."""
+        async with self.get_connection() as conn:
+            query = """
+            SELECT u.id, u.username, u.email, u.display_name, u.role, u.status,
+                   u.created_at, u.last_login,
+                   COUNT(usa.streamer_id) as assigned_streamers_count
+            FROM users u
+            LEFT JOIN user_streamer_assignments usa ON u.id = usa.user_id
+            GROUP BY u.id, u.username, u.email, u.display_name, u.role, u.status,
+                     u.created_at, u.last_login
+            ORDER BY u.username
+            """
+            
+            records = await conn.fetch(query)
+            return [dict(record) for record in records]

@@ -15,6 +15,7 @@ from urllib.parse import parse_qs
 from aiohttp import web, WSMsgType
 from aiohttp.web import Request, Response, WebSocketResponse
 from .auth_manager import AuthManager
+from models.user import UserRole, UserSession
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ class WebDashboardService:
         self.port = port
         
         # Authentication manager
-        self.auth_manager = AuthManager(admin_username, admin_password)
+        self.auth_manager = AuthManager(database_service=None)  # Will be set after db connection
         
         # Web server state
         self.app: Optional[web.Application] = None
@@ -53,6 +54,10 @@ class WebDashboardService:
         try:
             logger.info(f"Starting web dashboard on {self.host}:{self.port}")
             
+            # Connect auth manager to database service
+            if hasattr(self.monitor_service, 'database_service'):
+                self.auth_manager.database_service = self.monitor_service.database_service
+            
             # Create aiohttp application
             self.app = web.Application()
             
@@ -65,6 +70,8 @@ class WebDashboardService:
             # Authentication routes
             self.app.router.add_get('/login', self._handle_login_page)
             self.app.router.add_post('/login', self._handle_login_submit)
+            self.app.router.add_get('/register', self._handle_register_page)
+            self.app.router.add_post('/register', self._handle_register_submit)
             self.app.router.add_post('/logout', self._handle_logout)
             
             # Admin routes (protected)
@@ -73,6 +80,10 @@ class WebDashboardService:
             self.app.router.add_post('/admin/streamers/add', self._handle_add_streamer)
             self.app.router.add_post('/admin/streamers/remove', self._handle_remove_streamer)
             self.app.router.add_post('/admin/streamers/toggle', self._handle_toggle_streamer)
+            self.app.router.add_get('/admin/users', self._handle_admin_users)
+            self.app.router.add_post('/admin/users/add', self._handle_add_user)
+            self.app.router.add_post('/admin/users/assign', self._handle_assign_streamer)
+            self.app.router.add_post('/admin/users/unassign', self._handle_unassign_streamer)
             
             # Start server
             self.runner = web.AppRunner(self.app)
@@ -120,8 +131,25 @@ class WebDashboardService:
         logger.info("Web dashboard stopped")
     
     async def _handle_dashboard(self, request: Request) -> Response:
-        """Serve the main dashboard HTML page."""
-        html_content = self._get_dashboard_html()
+        """Serve the main landing page - check if user is logged in."""
+        # Check if user has valid session
+        session_token = request.cookies.get('session_token')
+        if session_token:
+            valid, user_session = self.auth_manager.validate_session(session_token)
+            if valid:
+                # User is logged in, show their dashboard
+                if user_session.role == UserRole.ADMIN:
+                    # Redirect admin to admin dashboard
+                    response = Response(status=302)
+                    response.headers['Location'] = '/admin'
+                    return response
+                else:
+                    # Show user dashboard
+                    html_content = self._get_user_dashboard_html(user_session)
+                    return Response(text=html_content, content_type='text/html')
+        
+        # No valid session, show splash page
+        html_content = self._get_splash_page_html()
         return Response(text=html_content, content_type='text/html')
     
     async def _handle_api_status(self, request: Request) -> Response:
@@ -197,12 +225,12 @@ class WebDashboardService:
             username = data.get('username', '').strip()
             password = data.get('password', '').strip()
             
-            success, session_token = self.auth_manager.authenticate(username, password)
+            success, session_token = await self.auth_manager.authenticate(username, password)
             
             if success:
-                # Set secure cookie and redirect to admin
+                # Set secure cookie and redirect to dashboard
                 response = Response(status=302)
-                response.headers['Location'] = '/admin'
+                response.headers['Location'] = '/'  # Will redirect to appropriate dashboard
                 response.set_cookie(
                     'session_token', 
                     session_token,
@@ -240,16 +268,16 @@ class WebDashboardService:
             response.headers['Location'] = '/'
             return response
     
-    async def _require_admin(self, request: Request) -> Optional[Dict[str, Any]]:
+    def _require_admin(self, request: Request) -> Optional[UserSession]:
         """Check if request has valid admin session."""
         try:
             session_token = request.cookies.get('session_token')
             if not session_token:
                 return None
             
-            valid, user_info = self.auth_manager.validate_session(session_token)
-            if valid and user_info.get('role') == 'admin':
-                return user_info
+            valid, user_session = self.auth_manager.validate_session(session_token)
+            if valid and user_session.role == UserRole.ADMIN:
+                return user_session
             
             return None
             
@@ -259,31 +287,31 @@ class WebDashboardService:
     
     async def _handle_admin_dashboard(self, request: Request) -> Response:
         """Serve the admin dashboard."""
-        user_info = await self._require_admin(request)
-        if not user_info:
+        user_session = self._require_admin(request)
+        if not user_session:
             # Redirect to login
             response = Response(status=302)
             response.headers['Location'] = '/login'
             return response
         
-        html_content = self._get_admin_dashboard_html(user_info)
+        html_content = self._get_admin_dashboard_html(user_session)
         return Response(text=html_content, content_type='text/html')
     
     async def _handle_admin_streamers(self, request: Request) -> Response:
         """Serve the admin streamers management page."""
-        user_info = await self._require_admin(request)
-        if not user_info:
+        user_session = self._require_admin(request)
+        if not user_session:
             response = Response(status=302)
             response.headers['Location'] = '/login'
             return response
         
-        html_content = self._get_admin_streamers_html(user_info)
+        html_content = self._get_admin_streamers_html(user_session)
         return Response(text=html_content, content_type='text/html')
     
     async def _handle_add_streamer(self, request: Request) -> Response:
         """Handle adding a new streamer."""
-        user_info = await self._require_admin(request)
-        if not user_info:
+        user_session = self._require_admin(request)
+        if not user_session:
             return Response(status=401, text="Unauthorized")
         
         try:
@@ -294,8 +322,14 @@ class WebDashboardService:
                 return Response(status=400, text="Username required")
             
             # Add streamer via database service
-            # This is a placeholder - need to implement actual database operations
-            logger.info(f"Admin {user_info['username']} adding streamer: {username}")
+            success = await self.database_service.add_streamer(username)
+            
+            if not success:
+                response = Response(status=302)
+                response.headers['Location'] = '/admin/streamers?error=add_failed'
+                return response
+            
+            logger.info(f"Admin {user_session.username} adding streamer: {username}")
             
             # Redirect back to streamers page
             response = Response(status=302)
@@ -517,6 +551,149 @@ class WebDashboardService:
 </body>
 </html>'''
     
+    async def _handle_admin_users(self, request: Request) -> Response:
+        """Serve the admin users management page."""
+        user_session = self._require_admin(request)
+        if not user_session:
+            response = Response(status=302)
+            response.headers['Location'] = '/login'
+            return response
+        
+        html_content = await self._get_admin_users_html(user_session)
+        return Response(text=html_content, content_type='text/html')
+    
+    async def _handle_add_user(self, request: Request) -> Response:
+        """Handle adding a new user."""
+        user_session = self._require_admin(request)
+        if not user_session:
+            return Response(status=401, text="Unauthorized")
+        
+        try:
+            data = await request.post()
+            username = data.get('username', '').strip()
+            email = data.get('email', '').strip()
+            password = data.get('password', '').strip()
+            display_name = data.get('display_name', '').strip()
+            role = data.get('role', 'user').strip()
+            
+            if not username or not email or not password:
+                response = Response(status=302)
+                response.headers['Location'] = '/admin/users?error=missing_fields'
+                return response
+            
+            # Create user via auth manager
+            success, message = await self.auth_manager.register_user(
+                username=username,
+                email=email, 
+                password=password,
+                display_name=display_name or None
+            )
+            
+            if success:
+                # Update role if not default user
+                if role != 'user':
+                    from models.user import UserRole, UserUpdate
+                    user_role = UserRole(role)
+                    update_data = UserUpdate(role=user_role)
+                    user = await self.database_service.get_user_by_username(username)
+                    if user:
+                        await self.database_service.update_user(user.id, update_data)
+                
+                logger.info(f"Admin {user_session.username} created user: {username}")
+                response = Response(status=302)
+                response.headers['Location'] = '/admin/users?success=added'
+                return response
+            else:
+                response = Response(status=302)
+                response.headers['Location'] = f'/admin/users?error=add_failed'
+                return response
+                
+        except Exception as e:
+            logger.error(f"Error adding user: {e}")
+            response = Response(status=302)
+            response.headers['Location'] = '/admin/users?error=add_failed'
+            return response
+    
+    async def _handle_assign_streamer(self, request: Request) -> Response:
+        """Handle assigning a streamer to a user."""
+        user_session = self._require_admin(request)
+        if not user_session:
+            return Response(status=401, text="Unauthorized")
+        
+        try:
+            data = await request.post()
+            user_id = int(data.get('user_id', 0))
+            streamer_id = int(data.get('streamer_id', 0))
+            
+            if not user_id or not streamer_id:
+                response = Response(status=302)
+                response.headers['Location'] = '/admin/users?error=missing_fields'
+                return response
+            
+            # Create assignment
+            from models.user import UserStreamerAssignmentCreate
+            assignment = UserStreamerAssignmentCreate(
+                user_id=user_id,
+                streamer_id=streamer_id
+            )
+            
+            result = await self.database_service.create_user_streamer_assignment(
+                assignment, assigned_by=user_session.user_id
+            )
+            
+            if result:
+                logger.info(f"Admin {user_session.username} assigned streamer {streamer_id} to user {user_id}")
+                response = Response(status=302)
+                response.headers['Location'] = '/admin/users?success=assigned'
+                return response
+            else:
+                response = Response(status=302)
+                response.headers['Location'] = '/admin/users?error=assign_failed'
+                return response
+                
+        except Exception as e:
+            logger.error(f"Error assigning streamer: {e}")
+            response = Response(status=302)
+            response.headers['Location'] = '/admin/users?error=assign_failed'
+            return response
+    
+    async def _handle_unassign_streamer(self, request: Request) -> Response:
+        """Handle unassigning a streamer from a user."""
+        user_session = self._require_admin(request)
+        if not user_session:
+            return Response(status=401, text="Unauthorized")
+        
+        try:
+            data = await request.post()
+            user_id = int(data.get('user_id', 0))
+            streamer_id = int(data.get('streamer_id', 0))
+            
+            if not user_id or not streamer_id:
+                response = Response(status=302)
+                response.headers['Location'] = '/admin/users?error=missing_fields'
+                return response
+            
+            # Remove assignment
+            success = await self.database_service.remove_user_streamer_assignment(
+                user_id, streamer_id
+            )
+            
+            if success:
+                logger.info(f"Admin {user_session.username} unassigned streamer {streamer_id} from user {user_id}")
+                response = Response(status=302)
+                response.headers['Location'] = '/admin/users?success=unassigned'
+                return response
+            else:
+                response = Response(status=302)
+                response.headers['Location'] = '/admin/users?error=unassign_failed'
+                return response
+                
+        except Exception as e:
+            logger.error(f"Error unassigning streamer: {e}")
+            response = Response(status=302)
+            response.headers['Location'] = '/admin/users?error=unassign_failed'
+            return response
+
     def _get_admin_dashboard_html(self, user_info: Dict[str, Any]) -> str:
         """Generate the admin dashboard HTML."""
         return f'''<!DOCTYPE html>
@@ -609,6 +786,10 @@ class WebDashboardService:
             <a href="/admin/streamers" class="menu-card">
                 <div class="menu-title">👥 MANAGE STREAMERS</div>
                 <div class="menu-desc">Add, remove, and configure streamers</div>
+            </a>
+            <a href="/admin/users" class="menu-card">
+                <div class="menu-title">👤 MANAGE USERS</div>
+                <div class="menu-desc">Create users and assign streamers</div>
             </a>
             <a href="/" class="menu-card">
                 <div class="menu-title">📊 VIEW DASHBOARD</div>
@@ -902,6 +1083,264 @@ class WebDashboardService:
 </body>
 </html>'''
     
+    async def _get_admin_users_html(self, user_session) -> str:
+        """Generate the admin users management HTML."""
+        # Get all users and streamers
+        try:
+            users = await self.database_service.get_all_users()
+            streamers = await self.database_service.get_all_streamers()
+        except Exception as e:
+            logger.error(f"Error fetching users/streamers: {e}")
+            users = []
+            streamers = []
+        
+        return f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Users - Kick Streamer Monitor</title>
+    <style>
+        body {{
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #00ff00;
+            margin: 0;
+            padding: 20px;
+        }}
+        .container {{ max-width: 1400px; margin: 0 auto; }}
+        .header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid #00ff00;
+            padding: 20px;
+            margin-bottom: 20px;
+            background: #0a0a0a;
+        }}
+        .back-btn {{
+            background: #003300;
+            border: 1px solid #00ff00;
+            color: #00ff00;
+            padding: 8px 15px;
+            text-decoration: none;
+            font-family: 'Courier New', monospace;
+        }}
+        .back-btn:hover {{
+            background: #00ff00;
+            color: #000000;
+        }}
+        .users-table {{
+            width: 100%;
+            border-collapse: collapse;
+            border: 1px solid #00ff00;
+            margin-bottom: 30px;
+        }}
+        .users-table th, .users-table td {{
+            border: 1px solid #00ff00;
+            padding: 10px;
+            text-align: left;
+        }}
+        .users-table th {{
+            background: #003300;
+            color: #ffff00;
+        }}
+        .add-user-form {{
+            border: 1px solid #00ff00;
+            padding: 20px;
+            background: #0a0a0a;
+            margin-bottom: 20px;
+        }}
+        .form-row {{
+            display: flex;
+            gap: 15px;
+            align-items: end;
+            margin-bottom: 15px;
+        }}
+        .form-group {{
+            flex: 1;
+        }}
+        .form-group label {{
+            display: block;
+            margin-bottom: 5px;
+            color: #ffff00;
+        }}
+        .form-group input, .form-group select {{
+            width: 100%;
+            padding: 8px;
+            background: #0a0a0a;
+            border: 1px solid #00ff00;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+        }}
+        .add-btn {{
+            background: #003300;
+            border: 1px solid #00ff00;
+            color: #00ff00;
+            padding: 10px 20px;
+            font-family: 'Courier New', monospace;
+            cursor: pointer;
+        }}
+        .add-btn:hover {{
+            background: #00ff00;
+            color: #000000;
+        }}
+        .assignment-section {{
+            border: 1px solid #00ff00;
+            padding: 20px;
+            background: #0a0a0a;
+            margin-top: 20px;
+        }}
+        .assignment-form {{
+            display: flex;
+            gap: 15px;
+            align-items: end;
+        }}
+        .role-admin {{ color: #ff6600; }}
+        .role-user {{ color: #00ff00; }}
+        .role-viewer {{ color: #ffff00; }}
+        .status-active {{ color: #00ff00; }}
+        .status-inactive {{ color: #888888; }}
+        .status-suspended {{ color: #ff6666; }}
+        .success-message, .error-message {{
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 1px solid;
+        }}
+        .success-message {{
+            background: #003300;
+            border-color: #00ff00;
+            color: #00ff00;
+        }}
+        .error-message {{
+            background: #330000;
+            border-color: #ff0000;
+            color: #ff6666;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>👤 MANAGE USERS</h1>
+            <a href="/admin" class="back-btn">&larr; BACK TO ADMIN</a>
+        </div>
+
+        <div id="message-container"></div>
+
+        <div class="add-user-form">
+            <h3>➕ ADD NEW USER</h3>
+            <form method="post" action="/admin/users/add">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="username">Username:</label>
+                        <input type="text" id="username" name="username" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="email">Email:</label>
+                        <input type="email" id="email" name="email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password:</label>
+                        <input type="password" id="password" name="password" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="display_name">Display Name:</label>
+                        <input type="text" id="display_name" name="display_name">
+                    </div>
+                    <div class="form-group">
+                        <label for="role">Role:</label>
+                        <select id="role" name="role">
+                            <option value="user">User</option>
+                            <option value="viewer">Viewer</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="add-btn">ADD USER</button>
+                </div>
+            </form>
+        </div>
+
+        <table class="users-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Username</th>
+                    <th>Email</th>
+                    <th>Display Name</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th>Assigned Streamers</th>
+                    <th>Created</th>
+                </tr>
+            </thead>
+            <tbody>
+                {"".join([f'''
+                <tr>
+                    <td>{user.id}</td>
+                    <td>{user.username}</td>
+                    <td>{user.email}</td>
+                    <td>{user.display_name or "-"}</td>
+                    <td class="role-{user.role}">{user.role.upper()}</td>
+                    <td class="status-{user.status}">{user.status.upper()}</td>
+                    <td>TODO: Load assignments</td>
+                    <td>{user.created_at.strftime("%Y-%m-%d %H:%M") if user.created_at else "-"}</td>
+                </tr>
+                ''' for user in users])}
+            </tbody>
+        </table>
+
+        <div class="assignment-section">
+            <h3>🔗 ASSIGN STREAMER TO USER</h3>
+            <form method="post" action="/admin/users/assign" class="assignment-form">
+                <div class="form-group">
+                    <label for="assign_user_id">User:</label>
+                    <select id="assign_user_id" name="user_id" required>
+                        <option value="">Select User</option>
+                        {"".join([f'<option value="{user.id}">{user.username} ({user.role})</option>' for user in users if user.role != 'admin'])}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="assign_streamer_id">Streamer:</label>
+                    <select id="assign_streamer_id" name="streamer_id" required>
+                        <option value="">Select Streamer</option>
+                        {"".join([f'<option value="{streamer.id}">{streamer.username}</option>' for streamer in streamers])}
+                    </select>
+                </div>
+                <button type="submit" class="add-btn">ASSIGN</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Check for messages in URL params
+        const urlParams = new URLSearchParams(window.location.search);
+        const success = urlParams.get('success');
+        const error = urlParams.get('error');
+        const messageContainer = document.getElementById('message-container');
+
+        if (success) {{
+            const messages = {{
+                'added': 'User created successfully!',
+                'assigned': 'Streamer assigned successfully!',
+                'unassigned': 'Streamer unassigned successfully!'
+            }};
+            messageContainer.innerHTML = `<div class="success-message">${{messages[success] || 'Operation successful!'}}</div>`;
+        }} else if (error) {{
+            const messages = {{
+                'add_failed': 'Failed to create user. Please try again.',
+                'assign_failed': 'Failed to assign streamer. Please try again.',
+                'unassign_failed': 'Failed to unassign streamer. Please try again.',
+                'missing_fields': 'Please fill in all required fields.'
+            }};
+            messageContainer.innerHTML = `<div class="error-message">${{messages[error] || 'Operation failed!'}}</div>`;
+        }}
+    </script>
+</body>
+</html>'''
+
     def _get_dashboard_html(self) -> str:
         """Generate the dashboard HTML page."""
         return '''<!DOCTYPE html>
