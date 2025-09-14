@@ -14,7 +14,8 @@
       "Bash(py:*)",
       "Bash(pg_isready:*)",
       "WebFetch(domain:kick.com)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "WebFetch(domain:108.61.86.99)"
     ],
     "deny": [],
     "ask": []

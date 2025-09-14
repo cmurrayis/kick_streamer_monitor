@@ -90,6 +90,7 @@ class WebDashboardService:
             self.app.router.add_get('/api/assignments', self._handle_api_assignments)
             self.app.router.add_get('/api/users/{user_id}/assignments', self._handle_api_user_assignments)
             self.app.router.add_get('/api/users/assignments-summary', self._handle_api_assignments_summary)
+            self.app.router.add_get('/api/debug/users', self._handle_api_debug_users)
             
             # Start server
             self.runner = web.AppRunner(self.app)
@@ -851,6 +852,44 @@ class WebDashboardService:
         except Exception as e:
             logger.error(f"Error fetching assignments summary API: {e}")
             return Response(status=500, text="Internal server error")
+    
+    async def _handle_api_debug_users(self, request: Request) -> Response:
+        """Debug API endpoint to check users without auth."""
+        try:
+            # Skip auth check for debugging
+            logger.info("Debug API: Checking users...")
+            
+            if not self.database_service:
+                return Response(text=json.dumps({"error": "No database service"}), content_type='application/json')
+            
+            users = await self.database_service.get_all_users()
+            logger.info(f"Debug API: Found {len(users)} users")
+            
+            users_data = []
+            for user in users:
+                users_data.append({
+                    'id': user.id,
+                    'username': user.username,
+                    'email': user.email,
+                    'role': user.role.value,
+                    'status': user.status.value
+                })
+            
+            debug_data = {
+                'user_count': len(users),
+                'users': users_data,
+                'database_connected': bool(self.database_service and self.database_service.pool)
+            }
+            
+            return Response(text=json.dumps(debug_data, indent=2), content_type='application/json')
+        except Exception as e:
+            logger.error(f"Debug API error: {e}")
+            error_data = {
+                'error': str(e),
+                'database_service': bool(self.database_service),
+                'pool': bool(self.database_service.pool if self.database_service else False)
+            }
+            return Response(text=json.dumps(error_data, indent=2), content_type='application/json')
 
     def _get_register_page_html(self) -> str:
         """Generate the registration page HTML."""
@@ -1980,6 +2019,11 @@ class WebDashboardService:
         
         # Generate user rows
         user_rows = ""
+        if not users:
+            logger.warning("No users found for admin users page")
+        else:
+            logger.info(f"Found {len(users)} users for admin users page")
+            
         for user in users:
             user_rows += f'''
                 <tr>
@@ -2504,7 +2548,58 @@ class WebDashboardService:
             }}
         }}
 
+        // Refresh dropdowns with current data
+        async function refreshDropdowns() {{
+            try {{
+                const [usersRes, streamersRes] = await Promise.all([
+                    fetch('/api/users'),
+                    fetch('/api/streamers')
+                ]);
+
+                const users = await usersRes.json();
+                const streamers = await streamersRes.json();
+
+                // Update assign user dropdown
+                const assignUserSelect = document.getElementById('assign_user_id');
+                const unassignUserSelect = document.getElementById('unassign_user_id');
+                
+                const userOptions = users
+                    .filter(u => u.role !== 'admin')
+                    .map(u => `<option value="${{u.id}}">${{u.username}} (${{u.role}})</option>`)
+                    .join('');
+
+                if (assignUserSelect) {{
+                    assignUserSelect.innerHTML = '<option value="">Select User</option>' + userOptions;
+                }}
+                if (unassignUserSelect) {{
+                    unassignUserSelect.innerHTML = '<option value="">Select User</option>' + userOptions;
+                }}
+
+                // Update streamer dropdown
+                const assignStreamerSelect = document.getElementById('assign_streamer_id');
+                const streamerOptions = streamers
+                    .map(s => `<option value="${{s.id}}">${{s.username}}</option>`)
+                    .join('');
+
+                if (assignStreamerSelect) {{
+                    assignStreamerSelect.innerHTML = '<option value="">Select Streamer</option>' + streamerOptions;
+                }}
+
+            }} catch (error) {{
+                console.error('Error refreshing dropdowns:', error);
+            }}
+        }}
+
+        // Check for successful user creation and refresh
+        const urlParams = new URLSearchParams(window.location.search);
+        const success = urlParams.get('success');
+        if (success === 'added') {{
+            // User was just created, refresh the dropdowns
+            setTimeout(refreshDropdowns, 500);
+        }}
+
         // Initialize on page load
+        refreshDropdowns();
         loadAssignmentMatrix();
         loadUserAssignmentCounts();
     </script>
