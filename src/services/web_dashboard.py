@@ -2252,13 +2252,41 @@ class WebDashboardService:
             color: #00ff00;
             font-family: 'Courier New', monospace;
         }}
-        .searchable-select {{
+        .custom-select-wrapper {{
             position: relative;
         }}
-        .searchable-select input {{
-            margin-bottom: 5px;
+        .custom-select {{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            padding: 8px;
+            background: #0a0a0a;
+            border: 1px solid #00ff00;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            cursor: pointer;
+            user-select: none;
         }}
-        .dropdown-list {{
+        .custom-select:hover {{
+            border-color: #ffff00;
+        }}
+        .custom-select.open {{
+            border-bottom: none;
+            border-bottom-left-radius: 0;
+            border-bottom-right-radius: 0;
+        }}
+        .select-display {{
+            flex: 1;
+        }}
+        .select-arrow {{
+            font-size: 12px;
+            transition: transform 0.2s;
+        }}
+        .custom-select.open .select-arrow {{
+            transform: rotate(180deg);
+        }}
+        .custom-dropdown {{
             position: absolute;
             top: 100%;
             left: 0;
@@ -2266,20 +2294,45 @@ class WebDashboardService:
             background: #0a0a0a;
             border: 1px solid #00ff00;
             border-top: none;
+            z-index: 1000;
+            max-height: 250px;
+            overflow: hidden;
+        }}
+        .dropdown-search {{
+            width: 100%;
+            padding: 8px;
+            background: #1a1a1a;
+            border: none;
+            border-bottom: 1px solid #003300;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            outline: none;
+        }}
+        .dropdown-search:focus {{
+            background: #0f0f0f;
+        }}
+        .dropdown-options {{
             max-height: 200px;
             overflow-y: auto;
-            z-index: 1000;
         }}
-        .dropdown-item {{
+        .dropdown-option {{
             padding: 8px;
             cursor: pointer;
             border-bottom: 1px solid #003300;
+            color: #00ff00;
         }}
-        .dropdown-item:hover {{
+        .dropdown-option:hover {{
             background: #003300;
         }}
-        .dropdown-item:last-child {{
+        .dropdown-option:last-child {{
             border-bottom: none;
+        }}
+        .dropdown-option.no-results {{
+            color: #888;
+            cursor: default;
+        }}
+        .dropdown-option.no-results:hover {{
+            background: transparent;
         }}
         .add-btn {{
             background: #003300;
@@ -2497,13 +2550,19 @@ class WebDashboardService:
                             </div>
                             <div class="form-group">
                                 <label for="assign_streamer_id">Streamer:</label>
-                                <div class="searchable-select">
-                                    <input type="text" id="streamer_search" placeholder="Search streamers..." autocomplete="off">
-                                    <select id="assign_streamer_id" name="streamer_id" required>
+                                <div class="custom-select-wrapper">
+                                    <div class="custom-select" id="custom_streamer_select">
+                                        <div class="select-display">Select Streamer</div>
+                                        <div class="select-arrow">▼</div>
+                                    </div>
+                                    <div class="custom-dropdown" id="streamer_custom_dropdown" style="display: none;">
+                                        <input type="text" class="dropdown-search" placeholder="Search streamers..." autocomplete="off">
+                                        <div class="dropdown-options" id="streamer_options_list"></div>
+                                    </div>
+                                    <select id="assign_streamer_id" name="streamer_id" required style="display: none;">
                                         <option value="">Select Streamer</option>
                                         {streamer_options}
                                     </select>
-                                    <div id="streamer_dropdown" class="dropdown-list" style="display: none;"></div>
                                 </div>
                             </div>
                             <button type="submit" class="add-btn">ASSIGN</button>
@@ -2802,73 +2861,105 @@ class WebDashboardService:
             }}, 500);
         }}
 
-        // Searchable dropdown functionality
+        // Custom searchable dropdown functionality
         function initializeSearchableDropdown() {{
-            const searchInput = document.getElementById('streamer_search');
-            const selectElement = document.getElementById('assign_streamer_id');
-            const dropdownList = document.getElementById('streamer_dropdown');
+            const customSelect = document.getElementById('custom_streamer_select');
+            const customDropdown = document.getElementById('streamer_custom_dropdown');
+            const searchInput = customDropdown.querySelector('.dropdown-search');
+            const optionsList = document.getElementById('streamer_options_list');
+            const hiddenSelect = document.getElementById('assign_streamer_id');
+            const selectDisplay = customSelect.querySelector('.select-display');
             
             let allStreamers = [];
+            let isOpen = false;
             
             // Store all streamers when dropdown is refreshed
             window.updateStreamerData = function(streamers) {{
                 allStreamers = streamers;
+                updateOptions(streamers);
             }};
             
-            searchInput.addEventListener('input', function() {{
-                const searchTerm = this.value.toLowerCase();
-                
-                if (searchTerm.length === 0) {{
-                    dropdownList.style.display = 'none';
-                    return;
-                }}
-                
+            function updateOptions(streamers) {{
+                optionsList.innerHTML = streamers.map(streamer => 
+                    `<div class="dropdown-option" data-value="${{streamer.id}}" data-text="${{streamer.username}}">
+                        ${{streamer.username}}
+                    </div>`
+                ).join('');
+            }}
+            
+            function filterOptions(searchTerm) {{
                 const filtered = allStreamers.filter(streamer => 
-                    streamer.username.toLowerCase().includes(searchTerm)
+                    streamer.username.toLowerCase().includes(searchTerm.toLowerCase())
                 );
                 
                 if (filtered.length === 0) {{
-                    dropdownList.innerHTML = '<div class="dropdown-item">No streamers found</div>';
+                    optionsList.innerHTML = '<div class="dropdown-option no-results">No streamers found</div>';
                 }} else {{
-                    dropdownList.innerHTML = filtered.map(streamer => 
-                        `<div class="dropdown-item" data-value="${{streamer.id}}" data-text="${{streamer.username}}">
-                            ${{streamer.username}}
-                        </div>`
-                    ).join('');
+                    updateOptions(filtered);
                 }}
+            }}
+            
+            function openDropdown() {{
+                if (allStreamers.length === 0) return;
                 
-                dropdownList.style.display = 'block';
+                isOpen = true;
+                customSelect.classList.add('open');
+                customDropdown.style.display = 'block';
+                searchInput.value = '';
+                searchInput.focus();
+                updateOptions(allStreamers);
+            }}
+            
+            function closeDropdown() {{
+                isOpen = false;
+                customSelect.classList.remove('open');
+                customDropdown.style.display = 'none';
+                searchInput.value = '';
+            }}
+            
+            // Click on custom select to toggle dropdown
+            customSelect.addEventListener('click', function(e) {{
+                e.stopPropagation();
+                if (isOpen) {{
+                    closeDropdown();
+                }} else {{
+                    openDropdown();
+                }}
             }});
             
-            // Handle dropdown item clicks
-            dropdownList.addEventListener('click', function(e) {{
-                if (e.target.classList.contains('dropdown-item') && e.target.dataset.value) {{
+            // Search input functionality
+            searchInput.addEventListener('input', function() {{
+                filterOptions(this.value);
+            }});
+            
+            // Prevent search input from closing dropdown when clicked
+            searchInput.addEventListener('click', function(e) {{
+                e.stopPropagation();
+            }});
+            
+            // Handle option clicks
+            optionsList.addEventListener('click', function(e) {{
+                if (e.target.classList.contains('dropdown-option') && !e.target.classList.contains('no-results')) {{
                     const value = e.target.dataset.value;
                     const text = e.target.dataset.text;
                     
-                    selectElement.value = value;
-                    searchInput.value = text;
-                    dropdownList.style.display = 'none';
+                    hiddenSelect.value = value;
+                    selectDisplay.textContent = text;
+                    closeDropdown();
                 }}
             }});
             
-            // Hide dropdown when clicking outside
+            // Close dropdown when clicking outside
             document.addEventListener('click', function(e) {{
-                if (!e.target.closest('.searchable-select')) {{
-                    dropdownList.style.display = 'none';
+                if (!e.target.closest('.custom-select-wrapper')) {{
+                    closeDropdown();
                 }}
             }});
             
-            // Show dropdown on focus
-            searchInput.addEventListener('focus', function() {{
-                if (this.value.length > 0 && allStreamers.length > 0) {{
-                    const searchTerm = this.value.toLowerCase();
-                    const filtered = allStreamers.filter(streamer => 
-                        streamer.username.toLowerCase().includes(searchTerm)
-                    );
-                    if (filtered.length > 0) {{
-                        dropdownList.style.display = 'block';
-                    }}
+            // Handle escape key
+            document.addEventListener('keydown', function(e) {{
+                if (e.key === 'Escape' && isOpen) {{
+                    closeDropdown();
                 }}
             }});
         }}
