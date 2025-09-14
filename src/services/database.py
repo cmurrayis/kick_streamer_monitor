@@ -369,7 +369,7 @@ class DatabaseService:
             query = """
             SELECT id, username, kick_user_id, status, display_name, profile_picture_url,
                    bio, follower_count, is_live, is_verified, last_seen_online, 
-                   last_status_update, created_at, updated_at
+                   last_status_update, created_at, updated_at, is_active
             FROM streamer
             ORDER BY username
             """

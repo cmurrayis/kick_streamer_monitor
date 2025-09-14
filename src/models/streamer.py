@@ -44,6 +44,11 @@ class StreamerBase(BaseModel):
     username: str = Field(..., description="Kick.com username", min_length=1)
     display_name: Optional[str] = Field(None, description="Human-readable display name")
     status: StreamerStatus = Field(StreamerStatus.UNKNOWN, description="Current online/offline status")
+    profile_picture_url: Optional[str] = Field(None, description="URL to streamer's profile picture")
+    bio: Optional[str] = Field(None, description="Streamer's bio/description")
+    follower_count: Optional[int] = Field(0, description="Number of followers")
+    is_live: Optional[bool] = Field(False, description="Current live status")
+    is_verified: Optional[bool] = Field(False, description="Whether the streamer is verified")
     last_seen_online: Optional[datetime] = Field(None, description="Timestamp of last online detection")
     last_status_update: Optional[datetime] = Field(None, description="Timestamp of most recent status change")
     is_active: bool = Field(True, description="Whether monitoring is enabled")
@@ -100,6 +105,11 @@ class StreamerUpdate(BaseModel):
     
     display_name: Optional[str] = None
     status: Optional[StreamerStatus] = None
+    profile_picture_url: Optional[str] = None
+    bio: Optional[str] = None
+    follower_count: Optional[int] = None
+    is_live: Optional[bool] = None
+    is_verified: Optional[bool] = None
     last_seen_online: Optional[datetime] = None
     last_status_update: Optional[datetime] = None
     is_active: Optional[bool] = None
