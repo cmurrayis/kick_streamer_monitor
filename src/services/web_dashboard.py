@@ -144,13 +144,14 @@ class WebDashboardService:
                     response.headers['Location'] = '/admin'
                     return response
                 else:
-                    # Show user dashboard
-                    html_content = self._get_user_dashboard_html(user_session)
+                    # Show user dashboard (TODO: Implement proper user dashboard in Task C)
+                    html_content = await self._get_user_dashboard_html(user_session)
                     return Response(text=html_content, content_type='text/html')
         
-        # No valid session, show splash page
-        html_content = self._get_splash_page_html()
-        return Response(text=html_content, content_type='text/html')
+        # No valid session, redirect to login
+        response = Response(status=302)
+        response.headers['Location'] = '/login'
+        return response
     
     async def _handle_api_status(self, request: Request) -> Response:
         """API endpoint for service status."""
@@ -894,6 +895,135 @@ class WebDashboardService:
             messageContainer.innerHTML = `<div class="success-message">${messages[message] || 'Success!'}</div>`;
         }
     </script>
+</body>
+</html>'''
+
+    async def _get_user_dashboard_html(self, user_session) -> str:
+        """Generate user dashboard HTML (basic implementation for now)."""
+        # Get user's assigned streamers
+        try:
+            assignments = await self.database_service.get_user_streamer_assignments(user_session.user_id)
+            streamer_ids = [a.streamer_id for a in assignments]
+            
+            if streamer_ids:
+                # Get streamers data
+                streamers = []
+                for streamer_id in streamer_ids:
+                    streamer = await self.database_service.get_streamer_by_id(streamer_id)
+                    if streamer:
+                        streamers.append(streamer)
+            else:
+                streamers = []
+        except Exception as e:
+            logger.error(f"Error fetching user streamers: {e}")
+            streamers = []
+        
+        # Generate streamer rows
+        streamer_rows = ""
+        for streamer in streamers:
+            status_class = f"status-{streamer.status}"
+            last_seen = streamer.last_seen_online.strftime("%Y-%m-%d %H:%M") if streamer.last_seen_online else "Never"
+            last_update = streamer.last_status_update.strftime("%Y-%m-%d %H:%M") if streamer.last_status_update else "Never"
+            
+            streamer_rows += f'''
+                <tr>
+                    <td>{streamer.username}</td>
+                    <td class="{status_class}">{streamer.status.upper()}</td>
+                    <td>{last_seen}</td>
+                    <td>{last_update}</td>
+                </tr>
+            '''
+        
+        return f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Dashboard - Kick Streamer Monitor</title>
+    <style>
+        body {{
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #00ff00;
+            margin: 0;
+            padding: 20px;
+        }}
+        .container {{ max-width: 1200px; margin: 0 auto; }}
+        .header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid #00ff00;
+            padding: 20px;
+            margin-bottom: 20px;
+            background: #0a0a0a;
+        }}
+        .user-info {{ color: #ffff00; }}
+        .logout-btn {{
+            background: #330000;
+            border: 1px solid #ff6600;
+            color: #ff6600;
+            padding: 8px 15px;
+            text-decoration: none;
+            font-family: 'Courier New', monospace;
+        }}
+        .logout-btn:hover {{
+            background: #ff6600;
+            color: #000000;
+        }}
+        .streamers-table {{
+            width: 100%;
+            border-collapse: collapse;
+            border: 1px solid #00ff00;
+            margin-top: 20px;
+        }}
+        .streamers-table th, .streamers-table td {{
+            border: 1px solid #00ff00;
+            padding: 10px;
+            text-align: left;
+        }}
+        .streamers-table th {{
+            background: #003300;
+            color: #ffff00;
+        }}
+        .status-online {{ color: #00ff00; }}
+        .status-offline {{ color: #ff6666; }}
+        .status-unknown {{ color: #ffff00; }}
+        .no-streamers {{
+            text-align: center;
+            padding: 40px;
+            color: #888888;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>📊 MY DASHBOARD</h1>
+                <div class="user-info">Logged in as: {user_session.username} ({user_session.role.upper()})</div>
+            </div>
+            <form method="post" action="/logout" style="margin: 0;">
+                <button type="submit" class="logout-btn">LOGOUT</button>
+            </form>
+        </div>
+
+        {f'''
+        <table class="streamers-table">
+            <thead>
+                <tr>
+                    <th>Streamer</th>
+                    <th>Status</th>
+                    <th>Last Seen Online</th>
+                    <th>Last Update</th>
+                </tr>
+            </thead>
+            <tbody>
+                {streamer_rows}
+            </tbody>
+        </table>
+        ''' if streamers else '<div class="no-streamers">No streamers assigned to your account.<br>Contact an administrator to assign streamers.</div>'}
+    </div>
 </body>
 </html>'''
 
