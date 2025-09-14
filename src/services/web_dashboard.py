@@ -148,10 +148,9 @@ class WebDashboardService:
                     html_content = await self._get_user_dashboard_html(user_session)
                     return Response(text=html_content, content_type='text/html')
         
-        # No valid session, redirect to login
-        response = Response(status=302)
-        response.headers['Location'] = '/login'
-        return response
+        # No valid session, show splash page
+        html_content = await self._get_splash_page_html()
+        return Response(text=html_content, content_type='text/html')
     
     async def _handle_api_status(self, request: Request) -> Response:
         """API endpoint for service status."""
@@ -870,7 +869,8 @@ class WebDashboardService:
         </form>
         
         <div class="login-link">
-            Already have an account? <a href="/login">Login here</a>
+            Already have an account? <a href="/login">Login here</a><br>
+            <a href="/" style="color: #888888; text-decoration: none; font-size: 14px;">← Back to main page</a>
         </div>
     </div>
 
@@ -895,6 +895,236 @@ class WebDashboardService:
             messageContainer.innerHTML = `<div class="success-message">${messages[message] || 'Success!'}</div>`;
         }
     </script>
+</body>
+</html>'''
+
+    async def _get_splash_page_html(self) -> str:
+        """Generate the public splash page HTML."""
+        # Get current system stats for display
+        try:
+            if hasattr(self.monitor_service, 'get_monitoring_stats'):
+                stats = self.monitor_service.get_monitoring_stats()
+            else:
+                stats = self.monitor_service.get_stats()
+            
+            # Get basic streamer count
+            total_streamers = await self.database_service.get_streamer_count() if self.database_service else 0
+            
+        except Exception as e:
+            logger.error(f"Error fetching splash page stats: {e}")
+            stats = {}
+            total_streamers = 0
+        
+        # Extract stats
+        service_status = stats.get('service_status', {})
+        streamer_stats = stats.get('streamers', {})
+        
+        return f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kick Streamer Monitor</title>
+    <style>
+        body {{
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #00ff00;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }}
+        .header {{
+            background: #0a0a0a;
+            border-bottom: 1px solid #00ff00;
+            padding: 20px;
+            text-align: center;
+        }}
+        .title {{
+            font-size: 2.5em;
+            color: #ffff00;
+            margin-bottom: 10px;
+        }}
+        .subtitle {{
+            font-size: 1.2em;
+            color: #888888;
+        }}
+        .main-content {{
+            flex: 1;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            width: 100%;
+            box-sizing: border-box;
+        }}
+        .stats-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }}
+        .stat-card {{
+            border: 1px solid #00ff00;
+            padding: 20px;
+            background: #0a0a0a;
+            text-align: center;
+        }}
+        .stat-value {{
+            font-size: 2em;
+            color: #ffff00;
+            margin-bottom: 5px;
+        }}
+        .stat-label {{
+            font-size: 0.9em;
+            color: #888888;
+        }}
+        .features {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }}
+        .feature-card {{
+            border: 1px solid #00ff00;
+            padding: 30px;
+            background: #0a0a0a;
+        }}
+        .feature-title {{
+            font-size: 1.3em;
+            color: #ffff00;
+            margin-bottom: 15px;
+        }}
+        .feature-desc {{
+            color: #888888;
+            line-height: 1.6;
+        }}
+        .auth-section {{
+            text-align: center;
+            padding: 40px;
+            border: 1px solid #00ff00;
+            background: #0a0a0a;
+        }}
+        .auth-title {{
+            font-size: 1.5em;
+            color: #ffff00;
+            margin-bottom: 20px;
+        }}
+        .auth-buttons {{
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }}
+        .auth-btn {{
+            background: #003300;
+            border: 1px solid #00ff00;
+            color: #00ff00;
+            padding: 12px 30px;
+            text-decoration: none;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            transition: all 0.3s;
+        }}
+        .auth-btn:hover {{
+            background: #00ff00;
+            color: #000000;
+        }}
+        .auth-btn.register {{
+            border-color: #ffff00;
+            color: #ffff00;
+        }}
+        .auth-btn.register:hover {{
+            background: #ffff00;
+            color: #000000;
+        }}
+        .footer {{
+            background: #0a0a0a;
+            border-top: 1px solid #00ff00;
+            padding: 20px;
+            text-align: center;
+            color: #888888;
+            font-size: 0.9em;
+        }}
+        .status-online {{ color: #00ff00; }}
+        .status-offline {{ color: #ff6666; }}
+        .status-running {{ color: #00ff00; }}
+        .status-stopped {{ color: #ff6666; }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="title">🚀 KICK STREAMER MONITOR</div>
+        <div class="subtitle">Real-time monitoring for Kick.com streamers</div>
+    </div>
+
+    <div class="main-content">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value status-{'running' if service_status.get('is_running', False) else 'stopped'}">
+                    {'RUNNING' if service_status.get('is_running', False) else 'STOPPED'}
+                </div>
+                <div class="stat-label">SERVICE STATUS</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{total_streamers}</div>
+                <div class="stat-label">TOTAL STREAMERS</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value status-online">{streamer_stats.get('online', 0)}</div>
+                <div class="stat-label">CURRENTLY ONLINE</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value status-offline">{streamer_stats.get('offline', 0)}</div>
+                <div class="stat-label">CURRENTLY OFFLINE</div>
+            </div>
+        </div>
+
+        <div class="features">
+            <div class="feature-card">
+                <div class="feature-title">📊 REAL-TIME MONITORING</div>
+                <div class="feature-desc">
+                    Track Kick.com streamers in real-time with automatic status updates.
+                    Get instant notifications when streamers go online or offline.
+                </div>
+            </div>
+            <div class="feature-card">
+                <div class="feature-title">👥 MULTI-USER ACCESS</div>
+                <div class="feature-desc">
+                    Create user accounts with customized streamer assignments.
+                    Admins can manage users and control access to specific streamers.
+                </div>
+            </div>
+            <div class="feature-card">
+                <div class="feature-title">📈 DETAILED ANALYTICS</div>
+                <div class="feature-desc">
+                    View comprehensive statistics and historical data.
+                    Monitor success rates, uptime, and streamer activity patterns.
+                </div>
+            </div>
+            <div class="feature-card">
+                <div class="feature-title">🔐 SECURE ACCESS</div>
+                <div class="feature-desc">
+                    Role-based authentication with secure session management.
+                    Admin controls for user management and system configuration.
+                </div>
+            </div>
+        </div>
+
+        <div class="auth-section">
+            <div class="auth-title">🔑 ACCESS YOUR DASHBOARD</div>
+            <div class="auth-buttons">
+                <a href="/login" class="auth-btn">LOGIN</a>
+                <a href="/register" class="auth-btn register">REGISTER</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <div>Kick Streamer Monitor v1.0 | Real-time monitoring service</div>
+        <div>Contact your administrator for access or assistance</div>
+    </div>
 </body>
 </html>'''
 

@@ -353,6 +353,32 @@ class DatabaseService:
             result = await conn.execute(query, streamer_id)
             return result == "DELETE 1"
     
+    async def get_streamer_count(self) -> int:
+        """Get total count of streamers."""
+        try:
+            query = "SELECT COUNT(*) FROM streamer"
+            result = await self.pool.fetchval(query)
+            return result or 0
+        except Exception as e:
+            logger.error(f"Error getting streamer count: {e}")
+            return 0
+    
+    async def get_all_streamers(self) -> List[Streamer]:
+        """Get all streamers."""
+        try:
+            query = """
+            SELECT id, username, kick_user_id, status, display_name, profile_picture_url,
+                   bio, follower_count, is_live, is_verified, last_seen_online, 
+                   last_status_update, created_at, updated_at
+            FROM streamer
+            ORDER BY username
+            """
+            records = await self.pool.fetch(query)
+            return [self._record_to_streamer(record) for record in records]
+        except Exception as e:
+            logger.error(f"Error getting all streamers: {e}")
+            return []
+    
     # =========================================================================
     # STATUS EVENT OPERATIONS  
     # =========================================================================
