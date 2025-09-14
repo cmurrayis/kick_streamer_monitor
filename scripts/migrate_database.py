@@ -14,15 +14,35 @@ from pathlib import Path
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from services.database import DatabaseService
+# Load environment variables
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    print("⚠️  dotenv not available - using environment variables directly")
+
+from services.database import DatabaseService, DatabaseConfig
 
 logger = logging.getLogger(__name__)
+
+def get_database_config():
+    """Get database configuration from environment or defaults."""
+    return DatabaseConfig(
+        host=os.getenv('DATABASE_HOST', 'localhost'),
+        port=int(os.getenv('DATABASE_PORT', '5432')),
+        database=os.getenv('DATABASE_NAME', 'kick_monitor'),
+        username=os.getenv('DATABASE_USER', 'kick_monitor'),
+        password=os.getenv('DATABASE_PASSWORD', ''),
+        min_connections=1,
+        max_connections=5
+    )
 
 async def run_migration():
     """Run database migration to add user management tables."""
     try:
-        # Initialize database service
-        db_service = DatabaseService()
+        # Initialize database service with config
+        config = get_database_config()
+        db_service = DatabaseService(config)
         await db_service.connect()
         
         print("🚀 Starting database migration...")
@@ -63,7 +83,8 @@ async def run_migration():
 async def check_migration_status():
     """Check if migration has already been applied."""
     try:
-        db_service = DatabaseService()
+        config = get_database_config()
+        db_service = DatabaseService(config)
         await db_service.connect()
         
         # Check if users table exists
@@ -85,6 +106,14 @@ async def check_migration_status():
 async def main():
     """Main migration function."""
     logging.basicConfig(level=logging.INFO)
+    
+    # Display database configuration
+    config = get_database_config()
+    print(f"🔍 Using database configuration:")
+    print(f"   Host: {config.host}:{config.port}")
+    print(f"   Database: {config.database}")
+    print(f"   User: {config.username}")
+    print()
     
     print("🔍 Checking migration status...")
     
