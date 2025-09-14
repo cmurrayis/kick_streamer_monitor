@@ -1129,7 +1129,7 @@ class WebDashboardService:
 </html>'''
 
     async def _get_user_dashboard_html(self, user_session) -> str:
-        """Generate user dashboard HTML (basic implementation for now)."""
+        """Generate enhanced user dashboard HTML with real-time updates."""
         # Get user's assigned streamers
         try:
             assignments = await self.database_service.get_user_streamer_assignments(user_session.user_id)
@@ -1148,6 +1148,10 @@ class WebDashboardService:
             logger.error(f"Error fetching user streamers: {e}")
             streamers = []
         
+        # Calculate initial stats
+        online_count = sum(1 for s in streamers if s.status.value == 'online')
+        offline_count = len(streamers) - online_count
+        
         # Generate content based on streamers
         if streamers:
             # Generate streamer rows
@@ -1158,16 +1162,16 @@ class WebDashboardService:
                 last_update = streamer.last_status_update.strftime("%Y-%m-%d %H:%M") if streamer.last_status_update else "Never"
                 
                 streamer_rows += f'''
-                    <tr>
+                    <tr data-streamer-id="{streamer.id}">
                         <td>{streamer.username}</td>
-                        <td class="{status_class}">{streamer.status.upper()}</td>
-                        <td>{last_seen}</td>
-                        <td>{last_update}</td>
+                        <td class="{status_class} streamer-status">{streamer.status.upper()}</td>
+                        <td class="last-seen">{last_seen}</td>
+                        <td class="last-update">{last_update}</td>
                     </tr>
                 '''
             
             main_content = f'''
-            <table class="streamers-table">
+            <table class="streamers-table" id="streamers-table">
                 <thead>
                     <tr>
                         <th>Streamer</th>
@@ -1176,7 +1180,7 @@ class WebDashboardService:
                         <th>Last Update</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="streamers-tbody">
                     {streamer_rows}
                 </tbody>
             </table>
@@ -1216,10 +1220,51 @@ class WebDashboardService:
             padding: 8px 15px;
             text-decoration: none;
             font-family: 'Courier New', monospace;
+            border: none;
+            cursor: pointer;
         }}
         .logout-btn:hover {{
             background: #ff6600;
             color: #000000;
+        }}
+        .connection-status {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            margin-top: 5px;
+            color: #888888;
+        }}
+        .connection-indicator {{
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ff6666;
+        }}
+        .connection-indicator.connected {{
+            background: #00ff00;
+        }}
+        .stats-row {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }}
+        .mini-stat {{
+            border: 1px solid #00ff00;
+            padding: 12px;
+            background: #0a0a0a;
+            text-align: center;
+        }}
+        .mini-stat-value {{
+            font-size: 20px;
+            color: #ffff00;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }}
+        .mini-stat-label {{
+            font-size: 11px;
+            color: #888888;
         }}
         .streamers-table {{
             width: 100%;
@@ -1236,6 +1281,12 @@ class WebDashboardService:
             background: #003300;
             color: #ffff00;
         }}
+        .streamers-table tr {{
+            transition: background-color 0.3s ease;
+        }}
+        .streamers-table tr.updated {{
+            background: #003300;
+        }}
         .status-online {{ color: #00ff00; }}
         .status-offline {{ color: #ff6666; }}
         .status-unknown {{ color: #ffff00; }}
@@ -1243,6 +1294,12 @@ class WebDashboardService:
             text-align: center;
             padding: 40px;
             color: #888888;
+        }}
+        .last-update-info {{
+            text-align: center;
+            margin-top: 20px;
+            color: #888888;
+            font-size: 12px;
         }}
     </style>
 </head>
@@ -1252,14 +1309,155 @@ class WebDashboardService:
             <div>
                 <h1>📊 MY DASHBOARD</h1>
                 <div class="user-info">Logged in as: {user_session.username} ({user_session.role.upper()})</div>
+                <div class="connection-status">
+                    <span class="connection-indicator" id="connection-indicator"></span>
+                    <span id="connection-status">Connecting...</span>
+                </div>
             </div>
             <form method="post" action="/logout" style="margin: 0;">
                 <button type="submit" class="logout-btn">LOGOUT</button>
             </form>
         </div>
 
+        <div class="stats-row">
+            <div class="mini-stat">
+                <div class="mini-stat-value" id="assigned-count">{len(streamers)}</div>
+                <div class="mini-stat-label">Assigned Streamers</div>
+            </div>
+            <div class="mini-stat">
+                <div class="mini-stat-value status-online" id="online-count">{online_count}</div>
+                <div class="mini-stat-label">Online Now</div>
+            </div>
+            <div class="mini-stat">
+                <div class="mini-stat-value status-offline" id="offline-count">{offline_count}</div>
+                <div class="mini-stat-label">Offline</div>
+            </div>
+            <div class="mini-stat">
+                <div class="mini-stat-value" id="last-change">-</div>
+                <div class="mini-stat-label">Last Change</div>
+            </div>
+        </div>
+
         {main_content}
+
+        <div class="last-update-info">
+            Last Updated: <span id="last-update">Loading...</span>
+        </div>
     </div>
+
+    <script>
+        let ws = null;
+        let reconnectInterval = null;
+        let userStreamers = {str(streamer_ids).replace("'", '"')};
+
+        function connectWebSocket() {{
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${{protocol}}//${{window.location.host}}/ws`);
+            
+            ws.onopen = function() {{
+                document.getElementById('connection-status').textContent = 'Connected';
+                document.getElementById('connection-indicator').classList.add('connected');
+                clearInterval(reconnectInterval);
+            }};
+            
+            ws.onmessage = function(event) {{
+                const data = JSON.parse(event.data);
+                if (data.type === 'update') {{
+                    updateUserDashboard(data.stats, data.streamers);
+                }}
+            }};
+            
+            ws.onclose = function() {{
+                document.getElementById('connection-status').textContent = 'Disconnected';
+                document.getElementById('connection-indicator').classList.remove('connected');
+                
+                // Reconnect every 5 seconds
+                if (!reconnectInterval) {{
+                    reconnectInterval = setInterval(connectWebSocket, 5000);
+                }}
+            }};
+        }}
+
+        function updateUserDashboard(stats, allStreamers) {{
+            // Filter to only show user's assigned streamers
+            const userAssignedStreamers = allStreamers.filter(s => userStreamers.includes(s.id));
+            
+            // Update stats
+            const onlineCount = userAssignedStreamers.filter(s => s.status === 'online').length;
+            const offlineCount = userAssignedStreamers.length - onlineCount;
+            
+            document.getElementById('online-count').textContent = onlineCount;
+            document.getElementById('offline-count').textContent = offlineCount;
+            
+            // Update streamers table
+            updateStreamersTable(userAssignedStreamers);
+            
+            // Update timestamp
+            document.getElementById('last-update').textContent = new Date().toLocaleString();
+        }}
+
+        function updateStreamersTable(streamers) {{
+            const tbody = document.getElementById('streamers-tbody');
+            if (!tbody || !streamers || streamers.length === 0) return;
+            
+            streamers.forEach(streamer => {{
+                const row = document.querySelector(`tr[data-streamer-id="${{streamer.id}}"]`);
+                if (row) {{
+                    const statusCell = row.querySelector('.streamer-status');
+                    const lastSeenCell = row.querySelector('.last-seen');
+                    const lastUpdateCell = row.querySelector('.last-update');
+                    
+                    // Check if status changed
+                    const currentStatus = statusCell.textContent.toLowerCase();
+                    const newStatus = streamer.status.toUpperCase();
+                    
+                    if (currentStatus !== newStatus.toLowerCase()) {{
+                        // Status changed - highlight row briefly
+                        row.classList.add('updated');
+                        setTimeout(() => row.classList.remove('updated'), 2000);
+                        
+                        // Update last change time
+                        document.getElementById('last-change').textContent = new Date().toLocaleTimeString();
+                    }}
+                    
+                    // Update status with correct styling
+                    statusCell.className = `status-${{streamer.status}} streamer-status`;
+                    statusCell.textContent = newStatus;
+                    
+                    // Update timestamps
+                    const lastSeen = streamer.last_seen_online ? 
+                        new Date(streamer.last_seen_online).toLocaleString() : 'Never';
+                    const lastUpdate = streamer.last_status_update ? 
+                        new Date(streamer.last_status_update).toLocaleString() : 'Never';
+                    
+                    lastSeenCell.textContent = lastSeen;
+                    lastUpdateCell.textContent = lastUpdate;
+                }}
+            }});
+        }}
+
+        // Initialize WebSocket connection
+        connectWebSocket();
+        
+        // Fallback: fetch data every 30 seconds if WebSocket fails
+        setInterval(async () => {{
+            if (!ws || ws.readyState !== WebSocket.OPEN) {{
+                try {{
+                    const [statsRes, streamersRes] = await Promise.all([
+                        fetch('/api/status'),
+                        fetch('/api/streamers')
+                    ]);
+                    
+                    const stats = await statsRes.json();
+                    const streamers = await streamersRes.json();
+                    
+                    updateUserDashboard(stats, streamers);
+                }} catch (error) {{
+                    console.error('Failed to fetch data:', error);
+                }}
+            }}
+        }}, 30000);
+    </script>
 </body>
 </html>'''
 
