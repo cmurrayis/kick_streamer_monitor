@@ -292,6 +292,18 @@ Report issues at: https://github.com/your-org/kick-monitor/issues
         default='0.0.0.0',
         help='Web dashboard host (default: 0.0.0.0 - all interfaces)'
     )
+    service_parser.add_argument(
+        '--admin-username',
+        type=str,
+        default='admin',
+        help='Admin username for web dashboard (default: admin)'
+    )
+    service_parser.add_argument(
+        '--admin-password',
+        type=str,
+        default='password',
+        help='Admin password for web dashboard (default: password)'
+    )
     
     # stop command
     stop_parser = subparsers.add_parser(

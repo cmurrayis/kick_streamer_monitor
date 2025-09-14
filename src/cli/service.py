@@ -54,6 +54,8 @@ class ServiceCommands:
             enable_web_dashboard = getattr(args, 'web_dashboard', True) and not getattr(args, 'no_web_dashboard', False)
             dashboard_host = getattr(args, 'dashboard_host', '0.0.0.0')
             dashboard_port = getattr(args, 'dashboard_port', 8080)
+            admin_username = getattr(args, 'admin_username', 'admin')
+            admin_password = getattr(args, 'admin_password', 'password')
             log_level = getattr(args, 'log_level', 'INFO')
             browser_fallback = getattr(args, 'browser_fallback', True)
             simple_mode = getattr(args, 'simple_mode', False)
@@ -161,7 +163,9 @@ class ServiceCommands:
                 self._web_dashboard = WebDashboardService(
                     monitor_service=self._monitor_service,
                     host=dashboard_host,
-                    port=dashboard_port
+                    port=dashboard_port,
+                    admin_username=admin_username,
+                    admin_password=admin_password
                 )
                 await self._web_dashboard.start()
                 print(f"✓ Web dashboard available at: {self._web_dashboard.url}")
