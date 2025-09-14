@@ -285,6 +285,47 @@ class WebDashboardService:
             logger.error(f"Auth check error: {e}")
             return None
     
+    async def _handle_register_page(self, request: Request) -> Response:
+        """Serve the registration page."""
+        html_content = self._get_register_page_html()
+        return Response(text=html_content, content_type='text/html')
+    
+    async def _handle_register_submit(self, request: Request) -> Response:
+        """Handle user registration submission."""
+        try:
+            data = await request.post()
+            username = data.get('username', '').strip()
+            email = data.get('email', '').strip()
+            password = data.get('password', '').strip()
+            confirm_password = data.get('confirm_password', '').strip()
+            display_name = data.get('display_name', '').strip()
+            
+            # Validate inputs
+            if not username or not email or not password:
+                return Response(status=302, headers={'Location': '/register?error=missing_fields'})
+            
+            if password != confirm_password:
+                return Response(status=302, headers={'Location': '/register?error=password_mismatch'})
+            
+            # Register user
+            success, message = await self.auth_manager.register_user(
+                username=username,
+                email=email,
+                password=password,
+                display_name=display_name or None
+            )
+            
+            if success:
+                # Redirect to login with success message
+                return Response(status=302, headers={'Location': '/login?message=registration_success'})
+            else:
+                # Redirect back with error
+                return Response(status=302, headers={'Location': f'/register?error=registration_failed&msg={message}'})
+                
+        except Exception as e:
+            logger.error(f"Registration error: {e}")
+            return Response(status=302, headers={'Location': '/register?error=registration_failed'})
+    
     async def _handle_admin_dashboard(self, request: Request) -> Response:
         """Serve the admin dashboard."""
         user_session = self._require_admin(request)
@@ -693,6 +734,168 @@ class WebDashboardService:
             response = Response(status=302)
             response.headers['Location'] = '/admin/users?error=unassign_failed'
             return response
+
+    def _get_register_page_html(self) -> str:
+        """Generate the registration page HTML."""
+        return '''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - Kick Streamer Monitor</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #00ff00;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .register-container {
+            background: #0a0a0a;
+            border: 1px solid #00ff00;
+            padding: 40px;
+            max-width: 400px;
+            width: 100%;
+        }
+        .title {
+            text-align: center;
+            color: #ffff00;
+            margin-bottom: 30px;
+            font-size: 24px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #ffff00;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            background: #1a1a1a;
+            border: 1px solid #00ff00;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            box-sizing: border-box;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: #ffff00;
+        }
+        .register-btn {
+            width: 100%;
+            padding: 12px;
+            background: #003300;
+            border: 1px solid #00ff00;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        .register-btn:hover {
+            background: #00ff00;
+            color: #000000;
+        }
+        .login-link {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .login-link a {
+            color: #ffff00;
+            text-decoration: none;
+        }
+        .login-link a:hover {
+            color: #00ff00;
+        }
+        .error-message, .success-message {
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 1px solid;
+            text-align: center;
+        }
+        .error-message {
+            background: #330000;
+            border-color: #ff0000;
+            color: #ff6666;
+        }
+        .success-message {
+            background: #003300;
+            border-color: #00ff00;
+            color: #00ff00;
+        }
+    </style>
+</head>
+<body>
+    <div class="register-container">
+        <div class="title">🔐 REGISTER</div>
+        
+        <div id="message-container"></div>
+        
+        <form method="post" action="/register">
+            <div class="form-group">
+                <label for="username">Username:</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="email">Email:</label>
+                <input type="email" id="email" name="email" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="display_name">Display Name (optional):</label>
+                <input type="text" id="display_name" name="display_name">
+            </div>
+            
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="confirm_password">Confirm Password:</label>
+                <input type="password" id="confirm_password" name="confirm_password" required>
+            </div>
+            
+            <button type="submit" class="register-btn">REGISTER</button>
+        </form>
+        
+        <div class="login-link">
+            Already have an account? <a href="/login">Login here</a>
+        </div>
+    </div>
+
+    <script>
+        // Check for messages in URL params
+        const urlParams = new URLSearchParams(window.location.search);
+        const error = urlParams.get('error');
+        const message = urlParams.get('message');
+        const messageContainer = document.getElementById('message-container');
+
+        if (error) {
+            const messages = {
+                'missing_fields': 'Please fill in all required fields.',
+                'password_mismatch': 'Passwords do not match.',
+                'registration_failed': 'Registration failed. Please try again.'
+            };
+            messageContainer.innerHTML = `<div class="error-message">${messages[error] || 'Registration failed!'}</div>`;
+        } else if (message) {
+            const messages = {
+                'registration_success': 'Registration successful! Please log in.'
+            };
+            messageContainer.innerHTML = `<div class="success-message">${messages[message] || 'Success!'}</div>`;
+        }
+    </script>
+</body>
+</html>'''
 
     def _get_admin_dashboard_html(self, user_info: Dict[str, Any]) -> str:
         """Generate the admin dashboard HTML."""
