@@ -398,7 +398,7 @@ class WebDashboardService:
                 return Response(status=400, text="Streamer ID required")
             
             # Remove streamer via database service
-            logger.info(f"Admin {user_info['username']} removing streamer ID: {streamer_id}")
+            logger.info(f"Admin {user_info.username} removing streamer ID: {streamer_id}")
             
             response = Response(status=302)
             response.headers['Location'] = '/admin/streamers?success=removed'
@@ -424,7 +424,7 @@ class WebDashboardService:
                 return Response(status=400, text="Streamer ID required")
             
             # Toggle streamer status via database service
-            logger.info(f"Admin {user_info['username']} toggling streamer ID: {streamer_id}")
+            logger.info(f"Admin {user_info.username} toggling streamer ID: {streamer_id}")
             
             response = Response(status=302)
             response.headers['Location'] = '/admin/streamers?success=toggled'
@@ -1033,7 +1033,7 @@ class WebDashboardService:
 </body>
 </html>'''
 
-    def _get_admin_dashboard_html(self, user_info: Dict[str, Any]) -> str:
+    def _get_admin_dashboard_html(self, user_session) -> str:
         """Generate the admin dashboard HTML."""
         return f'''<!DOCTYPE html>
 <html lang="en">
@@ -1114,7 +1114,7 @@ class WebDashboardService:
         <div class="header">
             <div>
                 <h1>🛠️ ADMIN DASHBOARD</h1>
-                <div class="admin-info">Logged in as: {user_info['username']}</div>
+                <div class="admin-info">Logged in as: {user_session.username}</div>
             </div>
             <form method="post" action="/logout" style="margin: 0;">
                 <button type="submit" class="logout-btn">LOGOUT</button>
@@ -1184,7 +1184,7 @@ class WebDashboardService:
 </body>
 </html>'''
     
-    def _get_admin_streamers_html(self, user_info: Dict[str, Any]) -> str:
+    def _get_admin_streamers_html(self, user_session) -> str:
         """Generate the admin streamers management page."""
         return '''<!DOCTYPE html>
 <html lang="en">
