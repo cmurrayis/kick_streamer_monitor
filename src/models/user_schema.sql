@@ -56,7 +56,7 @@ VALUES (
     'admin',
     'admin@kickmonitor.local',
     'System Administrator',
-    '8e36e9e4c0d29a7c1d6e1b8db5a5b5b3c5c0c4e8a7c1d6e1b8db5a5b5b3c5c0c4e',  -- 'admin123' hashed
+    'e37274ea6cd884f0d96960f501ecfb1ef329e054b03a9883e133e9681f55eb64',  -- 'admin123' hashed
     'admin',
     'active'
 ) ON CONFLICT (username) DO NOTHING;
@@ -67,7 +67,7 @@ VALUES (
     'testuser',
     'user@kickmonitor.local',
     'Test User',
-    '5f4dcc3b5aa765d61d8327deb882cf99e7b3b3c5c0c4e8a7c1d6e1b8db5a5b5b3',  -- 'user123' hashed
+    '618aa2e6d55ce49e3a97b98648d3f706f35a65b81d918057fdbda87197ce81db',  -- 'user123' hashed
     'user',
     'active'
 ) ON CONFLICT (username) DO NOTHING;
