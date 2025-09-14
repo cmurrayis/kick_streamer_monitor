@@ -918,21 +918,41 @@ class WebDashboardService:
             logger.error(f"Error fetching user streamers: {e}")
             streamers = []
         
-        # Generate streamer rows
-        streamer_rows = ""
-        for streamer in streamers:
-            status_class = f"status-{streamer.status}"
-            last_seen = streamer.last_seen_online.strftime("%Y-%m-%d %H:%M") if streamer.last_seen_online else "Never"
-            last_update = streamer.last_status_update.strftime("%Y-%m-%d %H:%M") if streamer.last_status_update else "Never"
+        # Generate content based on streamers
+        if streamers:
+            # Generate streamer rows
+            streamer_rows = ""
+            for streamer in streamers:
+                status_class = f"status-{streamer.status}"
+                last_seen = streamer.last_seen_online.strftime("%Y-%m-%d %H:%M") if streamer.last_seen_online else "Never"
+                last_update = streamer.last_status_update.strftime("%Y-%m-%d %H:%M") if streamer.last_status_update else "Never"
+                
+                streamer_rows += f'''
+                    <tr>
+                        <td>{streamer.username}</td>
+                        <td class="{status_class}">{streamer.status.upper()}</td>
+                        <td>{last_seen}</td>
+                        <td>{last_update}</td>
+                    </tr>
+                '''
             
-            streamer_rows += f'''
-                <tr>
-                    <td>{streamer.username}</td>
-                    <td class="{status_class}">{streamer.status.upper()}</td>
-                    <td>{last_seen}</td>
-                    <td>{last_update}</td>
-                </tr>
+            main_content = f'''
+            <table class="streamers-table">
+                <thead>
+                    <tr>
+                        <th>Streamer</th>
+                        <th>Status</th>
+                        <th>Last Seen Online</th>
+                        <th>Last Update</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {streamer_rows}
+                </tbody>
+            </table>
             '''
+        else:
+            main_content = '<div class="no-streamers">No streamers assigned to your account.<br>Contact an administrator to assign streamers.</div>'
         
         return f'''<!DOCTYPE html>
 <html lang="en">
@@ -1008,21 +1028,7 @@ class WebDashboardService:
             </form>
         </div>
 
-        {f'''
-        <table class="streamers-table">
-            <thead>
-                <tr>
-                    <th>Streamer</th>
-                    <th>Status</th>
-                    <th>Last Seen Online</th>
-                    <th>Last Update</th>
-                </tr>
-            </thead>
-            <tbody>
-                {streamer_rows}
-            </tbody>
-        </table>
-        ''' if streamers else '<div class="no-streamers">No streamers assigned to your account.<br>Contact an administrator to assign streamers.</div>'}
+        {main_content}
     </div>
 </body>
 </html>'''
