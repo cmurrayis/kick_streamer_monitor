@@ -81,6 +81,7 @@ class WebDashboardService:
             self.app.router.add_post('/admin/streamers/add', self._handle_add_streamer)
             self.app.router.add_post('/admin/streamers/remove', self._handle_remove_streamer)
             self.app.router.add_post('/admin/streamers/toggle', self._handle_toggle_streamer)
+            self.app.router.add_post('/admin/streamers/refresh', self._handle_refresh_streamer_data)
             self.app.router.add_get('/admin/users', self._handle_admin_users)
             self.app.router.add_post('/admin/users/add', self._handle_add_user)
             self.app.router.add_post('/admin/users/assign', self._handle_assign_streamer)
@@ -88,6 +89,7 @@ class WebDashboardService:
             
             # API endpoints for assignment management
             self.app.router.add_get('/api/users', self._handle_api_users)
+            self.app.router.add_get('/api/streamers', self._handle_api_streamers)
             self.app.router.add_get('/api/assignments', self._handle_api_assignments)
             self.app.router.add_get('/api/users/{user_id}/assignments', self._handle_api_user_assignments)
             self.app.router.add_get('/api/users/assignments-summary', self._handle_api_assignments_summary)
@@ -443,6 +445,91 @@ class WebDashboardService:
             response.headers['Location'] = '/admin/streamers?error=toggle_failed'
             return response
     
+    async def _handle_refresh_streamer_data(self, request: Request) -> Response:
+        """Handle refreshing streamer profile data from Kick.com API."""
+        user_session = self._require_admin(request)
+        if not user_session:
+            return Response(status=401, text="Unauthorized")
+        
+        try:
+            data = await request.post()
+            streamer_id = data.get('streamer_id', '').strip()
+            
+            if not streamer_id:
+                return Response(status=400, text="Streamer ID required")
+            
+            streamer_id = int(streamer_id)
+            
+            # Get streamer from database
+            streamer = await self.database_service.get_streamer_by_id(streamer_id)
+            if not streamer:
+                response = Response(status=302)
+                response.headers['Location'] = '/admin/streamers?error=streamer_not_found'
+                return response
+            
+            logger.info(f"Admin {user_session.username} refreshing data for streamer: {streamer.username}")
+            
+            # Fetch profile data from Kick.com API
+            if hasattr(self.monitor_service, 'auth_service'):
+                try:
+                    # Get channel info from Kick API
+                    channel_info = await self.monitor_service.auth_service.get_channel_info(streamer.username)
+                    
+                    if channel_info:
+                        # Extract profile data
+                        profile_data = {}
+                        
+                        # Map API response to our database fields
+                        if 'user' in channel_info:
+                            user_data = channel_info['user']
+                            profile_data['display_name'] = user_data.get('username')  # Kick uses username as display name
+                            profile_data['profile_picture_url'] = user_data.get('profile_pic')
+                            profile_data['bio'] = user_data.get('bio', '')
+                            profile_data['follower_count'] = user_data.get('followers_count', 0)
+                            profile_data['is_verified'] = user_data.get('verified', False)
+                        
+                        # Update database with new profile data
+                        updated_streamer = await self.database_service.update_streamer_profile_data(
+                            streamer_id, profile_data
+                        )
+                        
+                        if updated_streamer:
+                            logger.info(f"Successfully refreshed profile data for {streamer.username}")
+                            response = Response(status=302)
+                            response.headers['Location'] = '/admin/streamers?success=refreshed'
+                            return response
+                        else:
+                            logger.error(f"Failed to update profile data for {streamer.username}")
+                            response = Response(status=302)
+                            response.headers['Location'] = '/admin/streamers?error=update_failed'
+                            return response
+                    else:
+                        logger.warning(f"No channel info found for {streamer.username}")
+                        response = Response(status=302)
+                        response.headers['Location'] = '/admin/streamers?error=no_data'
+                        return response
+                        
+                except Exception as api_error:
+                    logger.error(f"API error refreshing {streamer.username}: {api_error}")
+                    response = Response(status=302)
+                    response.headers['Location'] = '/admin/streamers?error=api_failed'
+                    return response
+            else:
+                logger.error("No auth service available for API calls")
+                response = Response(status=302)
+                response.headers['Location'] = '/admin/streamers?error=no_api'
+                return response
+                
+        except ValueError:
+            response = Response(status=302)
+            response.headers['Location'] = '/admin/streamers?error=invalid_id'
+            return response
+        except Exception as e:
+            logger.error(f"Refresh streamer data error: {e}")
+            response = Response(status=302)
+            response.headers['Location'] = '/admin/streamers?error=refresh_failed'
+            return response
+    
     async def _broadcast_updates(self) -> None:
         """Broadcast updates to connected WebSocket clients."""
         while self._is_running:
@@ -777,6 +864,30 @@ class WebDashboardService:
             return Response(text=json.dumps(users_data), content_type='application/json')
         except Exception as e:
             logger.error(f"Error fetching users API: {e}")
+            return Response(status=500, text="Internal server error")
+    
+    async def _handle_api_streamers(self, request: Request) -> Response:
+        """API endpoint to get all streamers (for assignment management)."""
+        user_session = self._require_admin(request)
+        if not user_session:
+            return Response(status=401, text="Unauthorized")
+        
+        try:
+            streamers = await self.database_service.get_all_streamers()
+            streamers_data = []
+            for streamer in streamers:
+                streamers_data.append({
+                    'id': streamer.id,
+                    'username': streamer.username,
+                    'status': streamer.status.value,
+                    'display_name': streamer.display_name,
+                    'last_seen_online': streamer.last_seen_online.isoformat() if streamer.last_seen_online else None,
+                    'last_status_update': streamer.last_status_update.isoformat() if streamer.last_status_update else None,
+                    'is_active': streamer.is_active
+                })
+            return Response(text=json.dumps(streamers_data), content_type='application/json')
+        except Exception as e:
+            logger.error(f"Error fetching streamers API: {e}")
             return Response(status=500, text="Internal server error")
     
     async def _handle_api_assignments(self, request: Request) -> Response:
@@ -1946,14 +2057,22 @@ class WebDashboardService:
             const messages = {
                 'added': 'Streamer added successfully!',
                 'removed': 'Streamer removed successfully!',
-                'toggled': 'Streamer status toggled successfully!'
+                'toggled': 'Streamer status toggled successfully!',
+                'refreshed': 'Streamer profile data refreshed successfully!'
             };
             messageContainer.innerHTML = `<div class="success-message">${messages[success] || 'Operation successful!'}</div>`;
         } else if (error) {
             const messages = {
                 'add_failed': 'Failed to add streamer. Please try again.',
                 'remove_failed': 'Failed to remove streamer. Please try again.',
-                'toggle_failed': 'Failed to toggle streamer status. Please try again.'
+                'toggle_failed': 'Failed to toggle streamer status. Please try again.',
+                'refresh_failed': 'Failed to refresh streamer data. Please try again.',
+                'api_failed': 'API error: Could not fetch data from Kick.com.',
+                'no_data': 'No profile data found for this streamer.',
+                'update_failed': 'Failed to update database with new profile data.',
+                'streamer_not_found': 'Streamer not found in database.',
+                'no_api': 'API service not available.',
+                'invalid_id': 'Invalid streamer ID provided.'
             };
             messageContainer.innerHTML = `<div class="error-message">${messages[error] || 'Operation failed!'}</div>`;
         }
@@ -1984,6 +2103,10 @@ class WebDashboardService:
                             <td>${lastSeen}</td>
                             <td>${lastUpdate}</td>
                             <td>
+                                <form method="post" action="/admin/streamers/refresh" style="display: inline;">
+                                    <input type="hidden" name="streamer_id" value="${streamer.id}">
+                                    <button type="submit" class="action-btn" title="Refresh profile data from Kick.com">REFRESH</button>
+                                </form>
                                 <form method="post" action="/admin/streamers/toggle" style="display: inline;">
                                     <input type="hidden" name="streamer_id" value="${streamer.id}">
                                     <button type="submit" class="action-btn">TOGGLE</button>

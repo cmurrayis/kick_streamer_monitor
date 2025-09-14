@@ -363,18 +363,82 @@ class DatabaseService:
             logger.error(f"Error getting streamer count: {e}")
             return 0
     
+    async def update_streamer_profile_data(self, streamer_id: int, profile_data: dict) -> Optional[Streamer]:
+        """Update streamer profile data (bio, profile picture, etc.)."""
+        try:
+            update_fields = []
+            values = []
+            param_count = 1
+            
+            # Build dynamic update query for profile fields
+            profile_fields = {
+                'profile_picture_url': profile_data.get('profile_picture_url'),
+                'bio': profile_data.get('bio'), 
+                'follower_count': profile_data.get('follower_count'),
+                'is_verified': profile_data.get('is_verified'),
+                'display_name': profile_data.get('display_name')
+            }
+            
+            for field, value in profile_fields.items():
+                if value is not None:
+                    update_fields.append(f"{field} = ${param_count}")
+                    values.append(value)
+                    param_count += 1
+            
+            if not update_fields:
+                # No fields to update
+                return await self.get_streamer_by_id(streamer_id)
+            
+            # Add updated_at timestamp
+            update_fields.append(f"updated_at = ${param_count}")
+            values.append(datetime.now(timezone.utc))
+            param_count += 1
+            
+            # Add streamer_id for WHERE clause
+            values.append(streamer_id)
+            
+            query = f"""
+            UPDATE streamer 
+            SET {', '.join(update_fields)}
+            WHERE id = ${param_count}
+            RETURNING id, kick_user_id, username, display_name, status, profile_picture_url,
+                     bio, follower_count, is_live, is_verified, last_seen_online, 
+                     last_status_update, created_at, updated_at, is_active
+            """
+            
+            record = await self.pool.fetchrow(query, *values)
+            return Streamer(**dict(record)) if record else None
+        except Exception as e:
+            logger.error(f"Error updating streamer profile data: {e}")
+            return None
+    
     async def get_all_streamers(self) -> List[Streamer]:
         """Get all streamers."""
         try:
-            query = """
-            SELECT id, username, kick_user_id, status, display_name, profile_picture_url,
-                   bio, follower_count, is_live, is_verified, last_seen_online, 
-                   last_status_update, created_at, updated_at, is_active
-            FROM streamer
-            ORDER BY username
-            """
-            records = await self.pool.fetch(query)
-            return [self._record_to_streamer(record) for record in records]
+            # Try new schema first, fall back to old schema if columns don't exist
+            try:
+                query = """
+                    SELECT id, username, kick_user_id, status, display_name, profile_picture_url,
+                           bio, follower_count, is_live, is_verified, last_seen_online, 
+                           last_status_update, created_at, updated_at, is_active
+                    FROM streamer
+                    ORDER BY username
+                    """
+                records = await self.pool.fetch(query)
+                return [Streamer(**dict(record)) for record in records]
+            except Exception as new_schema_error:
+                logger.warning(f"New schema failed, trying fallback: {new_schema_error}")
+                # Fallback to old schema without new columns
+                query = """
+                    SELECT id, username, kick_user_id, status, display_name, 
+                           last_seen_online, last_status_update, created_at, updated_at, is_active,
+                           NULL as profile_picture_url, NULL as bio, 0 as follower_count,
+                           FALSE as is_live, FALSE as is_verified
+                    FROM streamer
+                    ORDER BY username
+                    """
+                records = await self.pool.fetch(query)
+                return [Streamer(**dict(record)) for record in records]
         except Exception as e:
             logger.error(f"Error getting all streamers: {e}")
             return []
