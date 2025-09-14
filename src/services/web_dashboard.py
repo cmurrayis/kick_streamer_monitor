@@ -1094,6 +1094,33 @@ class WebDashboardService:
             users = []
             streamers = []
         
+        # Generate user rows
+        user_rows = ""
+        for user in users:
+            user_rows += f'''
+                <tr>
+                    <td>{user.id}</td>
+                    <td>{user.username}</td>
+                    <td>{user.email}</td>
+                    <td>{user.display_name or "-"}</td>
+                    <td class="role-{user.role}">{user.role.upper()}</td>
+                    <td class="status-{user.status}">{user.status.upper()}</td>
+                    <td>TODO: Load assignments</td>
+                    <td>{user.created_at.strftime("%Y-%m-%d %H:%M") if user.created_at else "-"}</td>
+                </tr>
+            '''
+        
+        # Generate user options for assignment dropdown
+        user_options = ""
+        for user in users:
+            if user.role != 'admin':
+                user_options += f'<option value="{user.id}">{user.username} ({user.role})</option>'
+        
+        # Generate streamer options for assignment dropdown
+        streamer_options = ""
+        for streamer in streamers:
+            streamer_options += f'<option value="{streamer.id}">{streamer.username}</option>'
+        
         return f'''<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1277,18 +1304,7 @@ class WebDashboardService:
                 </tr>
             </thead>
             <tbody>
-                {"".join([f'''
-                <tr>
-                    <td>{user.id}</td>
-                    <td>{user.username}</td>
-                    <td>{user.email}</td>
-                    <td>{user.display_name or "-"}</td>
-                    <td class="role-{user.role}">{user.role.upper()}</td>
-                    <td class="status-{user.status}">{user.status.upper()}</td>
-                    <td>TODO: Load assignments</td>
-                    <td>{user.created_at.strftime("%Y-%m-%d %H:%M") if user.created_at else "-"}</td>
-                </tr>
-                ''' for user in users])}
+                {user_rows}
             </tbody>
         </table>
 
@@ -1299,14 +1315,14 @@ class WebDashboardService:
                     <label for="assign_user_id">User:</label>
                     <select id="assign_user_id" name="user_id" required>
                         <option value="">Select User</option>
-                        {"".join([f'<option value="{user.id}">{user.username} ({user.role})</option>' for user in users if user.role != 'admin'])}
+                        {user_options}
                     </select>
                 </div>
                 <div class="form-group">
                     <label for="assign_streamer_id">Streamer:</label>
                     <select id="assign_streamer_id" name="streamer_id" required>
                         <option value="">Select Streamer</option>
-                        {"".join([f'<option value="{streamer.id}">{streamer.username}</option>' for streamer in streamers])}
+                        {streamer_options}
                     </select>
                 </div>
                 <button type="submit" class="add-btn">ASSIGN</button>
