@@ -15,7 +15,10 @@
       "Bash(pg_isready:*)",
       "WebFetch(domain:kick.com)",
       "Bash(find:*)",
-      "WebFetch(domain:108.61.86.99)"
+      "WebFetch(domain:108.61.86.99)",
+      "Bash(curl:*)",
+      "Bash(tasklist)",
+      "Bash(taskkill:*)"
     ],
     "deny": [],
     "ask": []

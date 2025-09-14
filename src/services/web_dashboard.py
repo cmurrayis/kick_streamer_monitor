@@ -54,8 +54,9 @@ class WebDashboardService:
         try:
             logger.info(f"Starting web dashboard on {self.host}:{self.port}")
             
-            # Connect auth manager to database service
+            # Connect auth manager and web service to database service
             if hasattr(self.monitor_service, 'database_service'):
+                self.database_service = self.monitor_service.database_service
                 self.auth_manager.database_service = self.monitor_service.database_service
             
             # Create aiohttp application
@@ -2450,6 +2451,16 @@ class WebDashboardService:
                     fetch('/api/assignments')
                 ]);
 
+                // Check for authentication errors
+                if (usersRes.status === 401 || streamersRes.status === 401 || assignmentsRes.status === 401) {{
+                    window.location.href = '/login';
+                    return;
+                }}
+
+                if (!usersRes.ok || !streamersRes.ok || !assignmentsRes.ok) {{
+                    throw new Error('Failed to load data');
+                }}
+
                 const users = await usersRes.json();
                 const streamers = await streamersRes.json();
                 const assignments = await assignmentsRes.json();
@@ -2526,6 +2537,13 @@ class WebDashboardService:
         async function loadUserAssignmentCounts() {{
             try {{
                 const response = await fetch('/api/users/assignments-summary');
+                
+                // Check for authentication errors
+                if (response.status === 401) {{
+                    window.location.href = '/login';
+                    return;
+                }}
+                
                 if (response.ok) {{
                     const summary = await response.json();
                     
@@ -2555,6 +2573,16 @@ class WebDashboardService:
                     fetch('/api/users'),
                     fetch('/api/streamers')
                 ]);
+
+                // Check for authentication errors
+                if (usersRes.status === 401 || streamersRes.status === 401) {{
+                    window.location.href = '/login';
+                    return;
+                }}
+
+                if (!usersRes.ok || !streamersRes.ok) {{
+                    throw new Error('Failed to load dropdown data');
+                }}
 
                 const users = await usersRes.json();
                 const streamers = await streamersRes.json();
