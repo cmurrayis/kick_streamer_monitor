@@ -85,6 +85,12 @@ class WebDashboardService:
             self.app.router.add_post('/admin/users/assign', self._handle_assign_streamer)
             self.app.router.add_post('/admin/users/unassign', self._handle_unassign_streamer)
             
+            # API endpoints for assignment management
+            self.app.router.add_get('/api/users', self._handle_api_users)
+            self.app.router.add_get('/api/assignments', self._handle_api_assignments)
+            self.app.router.add_get('/api/users/{user_id}/assignments', self._handle_api_user_assignments)
+            self.app.router.add_get('/api/users/assignments-summary', self._handle_api_assignments_summary)
+            
             # Start server
             self.runner = web.AppRunner(self.app)
             await self.runner.setup()
@@ -671,7 +677,22 @@ class WebDashboardService:
                 response.headers['Location'] = '/admin/users?error=missing_fields'
                 return response
             
-            # Create assignment
+            # Check if streamer is already assigned to ANY user
+            existing_assignments = await self.database_service.get_streamer_user_assignments(streamer_id)
+            if existing_assignments:
+                # Streamer is already assigned to someone else
+                existing_user_ids = [a.user_id for a in existing_assignments]
+                if user_id not in existing_user_ids:
+                    response = Response(status=302)
+                    response.headers['Location'] = '/admin/users?error=streamer_already_assigned'
+                    return response
+                else:
+                    # Same user trying to assign same streamer again
+                    response = Response(status=302)
+                    response.headers['Location'] = '/admin/users?error=duplicate_assignment'
+                    return response
+            
+            # Create assignment (streamer not assigned to anyone)
             from models.user import UserStreamerAssignmentCreate
             assignment = UserStreamerAssignmentCreate(
                 user_id=user_id,
@@ -734,6 +755,102 @@ class WebDashboardService:
             response = Response(status=302)
             response.headers['Location'] = '/admin/users?error=unassign_failed'
             return response
+    
+    async def _handle_api_users(self, request: Request) -> Response:
+        """API endpoint to get all users (for assignment management)."""
+        user_session = self._require_admin(request)
+        if not user_session:
+            return Response(status=401, text="Unauthorized")
+        
+        try:
+            users = await self.database_service.get_all_users()
+            users_data = []
+            for user in users:
+                users_data.append({
+                    'id': user.id,
+                    'username': user.username,
+                    'role': user.role.value,
+                    'status': user.status.value
+                })
+            return Response(text=json.dumps(users_data), content_type='application/json')
+        except Exception as e:
+            logger.error(f"Error fetching users API: {e}")
+            return Response(status=500, text="Internal server error")
+    
+    async def _handle_api_assignments(self, request: Request) -> Response:
+        """API endpoint to get all assignments."""
+        user_session = self._require_admin(request)
+        if not user_session:
+            return Response(status=401, text="Unauthorized")
+        
+        try:
+            assignments = await self.database_service.get_all_user_streamer_assignments()
+            assignments_data = []
+            for assignment in assignments:
+                assignments_data.append({
+                    'user_id': assignment.user_id,
+                    'streamer_id': assignment.streamer_id,
+                    'assigned_at': assignment.assigned_at.isoformat() if assignment.assigned_at else None
+                })
+            return Response(text=json.dumps(assignments_data), content_type='application/json')
+        except Exception as e:
+            logger.error(f"Error fetching assignments API: {e}")
+            return Response(status=500, text="Internal server error")
+    
+    async def _handle_api_user_assignments(self, request: Request) -> Response:
+        """API endpoint to get assignments for a specific user."""
+        user_session = self._require_admin(request)
+        if not user_session:
+            return Response(status=401, text="Unauthorized")
+        
+        try:
+            user_id = int(request.match_info['user_id'])
+            assignments = await self.database_service.get_user_streamer_assignments(user_id)
+            
+            assignments_data = []
+            for assignment in assignments:
+                streamer = await self.database_service.get_streamer_by_id(assignment.streamer_id)
+                if streamer:
+                    assignments_data.append({
+                        'streamer_id': assignment.streamer_id,
+                        'streamer_username': streamer.username
+                    })
+            
+            return Response(text=json.dumps(assignments_data), content_type='application/json')
+        except Exception as e:
+            logger.error(f"Error fetching user assignments API: {e}")
+            return Response(status=500, text="Internal server error")
+    
+    async def _handle_api_assignments_summary(self, request: Request) -> Response:
+        """API endpoint to get assignment summary for all users."""
+        user_session = self._require_admin(request)
+        if not user_session:
+            return Response(status=401, text="Unauthorized")
+        
+        try:
+            users = await self.database_service.get_all_users()
+            summary_data = []
+            
+            for user in users:
+                if user.role.value != 'admin':  # Skip admin users
+                    assignments = await self.database_service.get_user_streamer_assignments(user.id)
+                    streamer_names = []
+                    
+                    for assignment in assignments:
+                        streamer = await self.database_service.get_streamer_by_id(assignment.streamer_id)
+                        if streamer:
+                            streamer_names.append(streamer.username)
+                    
+                    summary_data.append({
+                        'user_id': user.id,
+                        'username': user.username,
+                        'streamers': streamer_names
+                    })
+            
+            return Response(text=json.dumps(summary_data), content_type='application/json')
+        except Exception as e:
+            logger.error(f"Error fetching assignments summary API: {e}")
+            return Response(status=500, text="Internal server error")
 
     def _get_register_page_html(self) -> str:
         """Generate the registration page HTML."""
@@ -1872,7 +1989,7 @@ class WebDashboardService:
                     <td>{user.display_name or "-"}</td>
                     <td class="role-{user.role}">{user.role.upper()}</td>
                     <td class="status-{user.status}">{user.status.upper()}</td>
-                    <td>TODO: Load assignments</td>
+                    <td class="assignments-cell" id="assignments-{user.id}">Loading...</td>
                     <td>{user.created_at.strftime("%Y-%m-%d %H:%M") if user.created_at else "-"}</td>
                 </tr>
             '''
@@ -1985,10 +2102,101 @@ class WebDashboardService:
             background: #0a0a0a;
             margin-top: 20px;
         }}
+        .assignment-tools {{
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }}
         .assignment-form {{
+            border: 1px solid #ffff00;
+            padding: 15px;
+            background: #0f0f0f;
+        }}
+        .assignment-form h4 {{
+            color: #ffff00;
+            margin-top: 0;
+            margin-bottom: 15px;
+        }}
+        .assignment-form .form-row {{
             display: flex;
             gap: 15px;
             align-items: end;
+        }}
+        .remove-btn {{
+            background: #330000;
+            border: 1px solid #ff6600;
+            color: #ff6600;
+            padding: 10px 20px;
+            font-family: 'Courier New', monospace;
+            cursor: pointer;
+        }}
+        .remove-btn:hover {{
+            background: #ff6600;
+            color: #000000;
+        }}
+        .assignment-matrix {{
+            border: 1px solid #00ff00;
+            padding: 15px;
+            background: #0f0f0f;
+        }}
+        .assignment-matrix h4 {{
+            color: #00ff00;
+            margin-top: 0;
+        }}
+        .matrix-container {{
+            overflow-x: auto;
+        }}
+        .assignment-grid {{
+            display: grid;
+            grid-template-columns: 150px repeat(auto-fit, minmax(80px, 1fr));
+            gap: 2px;
+            font-size: 11px;
+        }}
+        .matrix-header {{
+            background: #003300;
+            color: #ffff00;
+            padding: 5px;
+            text-align: center;
+            font-weight: bold;
+        }}
+        .matrix-user {{
+            background: #0a0a0a;
+            color: #00ff00;
+            padding: 5px;
+            border-right: 1px solid #333;
+        }}
+        .matrix-cell {{
+            background: #1a1a1a;
+            padding: 5px;
+            text-align: center;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }}
+        .matrix-cell.assigned {{
+            background: #003300;
+            color: #00ff00;
+        }}
+        .matrix-cell.not-assigned {{
+            background: #330000;
+            color: #ff6666;
+        }}
+        .matrix-cell:hover {{
+            background: #333333;
+        }}
+        .assignments-cell {{
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }}
+        .assignment-tag {{
+            display: inline-block;
+            background: #003300;
+            color: #00ff00;
+            padding: 2px 6px;
+            margin: 1px;
+            border-radius: 3px;
+            font-size: 10px;
         }}
         .role-admin {{ color: #ff6600; }}
         .role-user {{ color: #00ff00; }}
@@ -2076,24 +2284,61 @@ class WebDashboardService:
         </table>
 
         <div class="assignment-section">
-            <h3>🔗 ASSIGN STREAMER TO USER</h3>
-            <form method="post" action="/admin/users/assign" class="assignment-form">
-                <div class="form-group">
-                    <label for="assign_user_id">User:</label>
-                    <select id="assign_user_id" name="user_id" required>
-                        <option value="">Select User</option>
-                        {user_options}
-                    </select>
+            <h3>🔗 STREAMER ASSIGNMENT MANAGEMENT</h3>
+            
+            <div class="assignment-tools">
+                <div class="assignment-form">
+                    <h4>➕ Assign Streamer to User</h4>
+                    <form method="post" action="/admin/users/assign">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="assign_user_id">User:</label>
+                                <select id="assign_user_id" name="user_id" required>
+                                    <option value="">Select User</option>
+                                    {user_options}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="assign_streamer_id">Streamer:</label>
+                                <select id="assign_streamer_id" name="streamer_id" required>
+                                    <option value="">Select Streamer</option>
+                                    {streamer_options}
+                                </select>
+                            </div>
+                            <button type="submit" class="add-btn">ASSIGN</button>
+                        </div>
+                    </form>
                 </div>
-                <div class="form-group">
-                    <label for="assign_streamer_id">Streamer:</label>
-                    <select id="assign_streamer_id" name="streamer_id" required>
-                        <option value="">Select Streamer</option>
-                        {streamer_options}
-                    </select>
+                
+                <div class="assignment-form">
+                    <h4>➖ Remove Assignment</h4>
+                    <form method="post" action="/admin/users/unassign">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="unassign_user_id">User:</label>
+                                <select id="unassign_user_id" name="user_id" required onchange="loadUserAssignments(this.value)">
+                                    <option value="">Select User</option>
+                                    {user_options}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="unassign_streamer_id">Assigned Streamer:</label>
+                                <select id="unassign_streamer_id" name="streamer_id" required>
+                                    <option value="">Select User First</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="remove-btn">REMOVE</button>
+                        </div>
+                    </form>
                 </div>
-                <button type="submit" class="add-btn">ASSIGN</button>
-            </form>
+            </div>
+            
+            <div class="assignment-matrix">
+                <h4>📊 Assignment Overview</h4>
+                <div class="matrix-container" id="assignment-matrix">
+                    Loading assignment data...
+                </div>
+            </div>
         </div>
     </div>
 
@@ -2116,10 +2361,152 @@ class WebDashboardService:
                 'add_failed': 'Failed to create user. Please try again.',
                 'assign_failed': 'Failed to assign streamer. Please try again.',
                 'unassign_failed': 'Failed to unassign streamer. Please try again.',
-                'missing_fields': 'Please fill in all required fields.'
+                'missing_fields': 'Please fill in all required fields.',
+                'streamer_already_assigned': 'This streamer is already assigned to another user.',
+                'duplicate_assignment': 'This streamer is already assigned to this user.'
             }};
             messageContainer.innerHTML = `<div class="error-message">${{messages[error] || 'Operation failed!'}}</div>`;
         }}
+
+        // Load user assignments for removal dropdown
+        async function loadUserAssignments(userId) {{
+            if (!userId) {{
+                document.getElementById('unassign_streamer_id').innerHTML = '<option value="">Select User First</option>';
+                return;
+            }}
+
+            try {{
+                const response = await fetch(`/api/users/${{userId}}/assignments`);
+                if (response.ok) {{
+                    const assignments = await response.json();
+                    const select = document.getElementById('unassign_streamer_id');
+                    
+                    if (assignments.length === 0) {{
+                        select.innerHTML = '<option value="">No assignments found</option>';
+                    }} else {{
+                        select.innerHTML = assignments.map(a => 
+                            `<option value="${{a.streamer_id}}">${{a.streamer_username}}</option>`
+                        ).join('');
+                    }}
+                }} else {{
+                    document.getElementById('unassign_streamer_id').innerHTML = '<option value="">Error loading assignments</option>';
+                }}
+            }} catch (error) {{
+                console.error('Error loading assignments:', error);
+                document.getElementById('unassign_streamer_id').innerHTML = '<option value="">Error loading assignments</option>';
+            }}
+        }}
+
+        // Load assignment matrix
+        async function loadAssignmentMatrix() {{
+            try {{
+                const [usersRes, streamersRes, assignmentsRes] = await Promise.all([
+                    fetch('/api/users'),
+                    fetch('/api/streamers'), 
+                    fetch('/api/assignments')
+                ]);
+
+                const users = await usersRes.json();
+                const streamers = await streamersRes.json();
+                const assignments = await assignmentsRes.json();
+
+                // Create assignment lookup
+                const assignmentMap = new Map();
+                assignments.forEach(a => {{
+                    const key = `${{a.user_id}}-${{a.streamer_id}}`;
+                    assignmentMap.set(key, true);
+                }});
+
+                // Build matrix HTML
+                let matrixHTML = '<div class="assignment-grid">';
+                
+                // Header row
+                matrixHTML += '<div class="matrix-header">User \\\\\\\\ Streamer</div>';
+                streamers.forEach(streamer => {{
+                    matrixHTML += `<div class="matrix-header">${{streamer.username}}</div>`;
+                }});
+
+                // User rows
+                users.filter(u => u.role !== 'admin').forEach(user => {{
+                    matrixHTML += `<div class="matrix-user">${{user.username}}</div>`;
+                    streamers.forEach(streamer => {{
+                        const isAssigned = assignmentMap.has(`${{user.id}}-${{streamer.id}}`);
+                        const cellClass = isAssigned ? 'assigned' : 'not-assigned';
+                        const cellText = isAssigned ? '✓' : '✗';
+                        matrixHTML += `<div class="matrix-cell ${{cellClass}}" 
+                                        onclick="toggleAssignment(${{user.id}}, ${{streamer.id}}, ${{isAssigned}})"
+                                        title="${{user.username}} - ${{streamer.username}}">
+                                        ${{cellText}}
+                                      </div>`;
+                    }});
+                }});
+
+                matrixHTML += '</div>';
+                document.getElementById('assignment-matrix').innerHTML = matrixHTML;
+
+            }} catch (error) {{
+                console.error('Error loading assignment matrix:', error);
+                document.getElementById('assignment-matrix').innerHTML = 'Error loading assignment data';
+            }}
+        }}
+
+        // Toggle assignment via matrix click
+        async function toggleAssignment(userId, streamerId, isCurrentlyAssigned) {{
+            const action = isCurrentlyAssigned ? 'unassign' : 'assign';
+            const url = `/admin/users/${{action}}`;
+            
+            try {{
+                const formData = new FormData();
+                formData.append('user_id', userId);
+                formData.append('streamer_id', streamerId);
+
+                const response = await fetch(url, {{
+                    method: 'POST',
+                    body: formData
+                }});
+
+                if (response.ok) {{
+                    // Reload matrix to show changes
+                    loadAssignmentMatrix();
+                    loadUserAssignmentCounts();
+                }} else {{
+                    alert('Failed to update assignment');
+                }}
+            }} catch (error) {{
+                console.error('Error toggling assignment:', error);
+                alert('Error updating assignment');
+            }}
+        }}
+
+        // Load assignment counts for users table
+        async function loadUserAssignmentCounts() {{
+            try {{
+                const response = await fetch('/api/users/assignments-summary');
+                if (response.ok) {{
+                    const summary = await response.json();
+                    
+                    summary.forEach(userSummary => {{
+                        const cell = document.getElementById(`assignments-${{userSummary.user_id}}`);
+                        if (cell) {{
+                            if (userSummary.streamers.length === 0) {{
+                                cell.innerHTML = '<span style="color: #888;">None</span>';
+                            }} else {{
+                                const tags = userSummary.streamers.map(s => 
+                                    `<span class="assignment-tag">${{s}}</span>`
+                                ).join('');
+                                cell.innerHTML = tags;
+                            }}
+                        }}
+                    }});
+                }}
+            }} catch (error) {{
+                console.error('Error loading assignment counts:', error);
+            }}
+        }}
+
+        // Initialize on page load
+        loadAssignmentMatrix();
+        loadUserAssignmentCounts();
     </script>
 </body>
 </html>'''

@@ -915,6 +915,20 @@ class DatabaseService:
             result = await conn.execute(query, user_id, streamer_id)
             return result == "DELETE 1"
     
+    async def get_all_user_streamer_assignments(self) -> List[UserStreamerAssignment]:
+        """Get all user-streamer assignments."""
+        try:
+            query = """
+            SELECT id, user_id, streamer_id, assigned_at, assigned_by
+            FROM user_streamer_assignments
+            ORDER BY assigned_at DESC
+            """
+            records = await self.pool.fetch(query)
+            return [self._record_to_user_streamer_assignment(record) for record in records]
+        except Exception as e:
+            logger.error(f"Error getting all user streamer assignments: {e}")
+            return []
+    
     async def get_users_with_streamer_assignments(self) -> List[Dict[str, Any]]:
         """Get all users with their assigned streamer counts."""
         async with self.get_connection() as conn:
