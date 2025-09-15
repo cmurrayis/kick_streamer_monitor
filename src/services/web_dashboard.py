@@ -1223,16 +1223,16 @@ class WebDashboardService:
     
     async def _handle_api_assignments_summary(self, request: Request) -> Response:
         """API endpoint to get assignment summary for all users."""
-        logger.info("Assignment summary API called")
+        logger.error("DEBUG: Assignment summary API called")  # Changed to ERROR so it shows
 
         user_session = self._require_admin(request)
         if not user_session:
-            logger.warning("Assignment summary API: Unauthorized access attempt")
+            logger.error("DEBUG: Assignment summary API: Unauthorized access attempt")
             return Response(status=401, text="Unauthorized")
 
         # Check if database service is available
         if not self.database_service:
-            logger.error("Database service not available for assignments summary")
+            logger.error("DEBUG: Database service not available for assignments summary")
             return Response(status=500, text="Database service unavailable")
 
         try:
@@ -1275,7 +1275,7 @@ class WebDashboardService:
                 except Exception as user_error:
                     logger.error(f"Error processing user {user.username}: {user_error}")
             
-            logger.info(f"Returning {len(summary_data)} user summaries")
+            logger.error(f"DEBUG: Returning {len(summary_data)} user summaries: {summary_data}")
             return Response(text=json.dumps(summary_data), content_type='application/json')
         except Exception as e:
             logger.error(f"Error fetching assignments summary API: {e}")
