@@ -100,6 +100,12 @@ class WebDashboardService:
             self.app.router.add_get('/api/users/{user_id}/assignments', self._handle_api_user_assignments)
             self.app.router.add_get('/api/users/assignments-summary', self._handle_api_assignments_summary)
             self.app.router.add_get('/api/debug/users', self._handle_api_debug_users)
+
+            # Dashboard and analytics API endpoints
+            self.app.router.add_get('/api/dashboard/summary', self._handle_api_dashboard_summary)
+            self.app.router.add_get('/api/dashboard/status-grid', self._handle_api_status_grid)
+            self.app.router.add_get('/api/dashboard/recent-activity', self._handle_api_recent_activity)
+            self.app.router.add_get('/api/dashboard/system-health', self._handle_api_system_health)
             
             # Start server
             self.runner = web.AppRunner(self.app)
@@ -1320,6 +1326,92 @@ class WebDashboardService:
                 'pool': bool(self.database_service.pool if self.database_service else False)
             }
             return Response(text=json.dumps(error_data, indent=2), content_type='application/json')
+
+    # =========================================================================
+    # DASHBOARD API HANDLERS
+    # =========================================================================
+
+    async def _handle_api_dashboard_summary(self, request: Request) -> Response:
+        """API endpoint for dashboard summary statistics."""
+        try:
+            if not self.database_service:
+                return Response(status=503, text=json.dumps({"error": "Database service unavailable"}),
+                              content_type='application/json')
+
+            summary = await self.database_service.get_dashboard_summary()
+            return Response(text=json.dumps(summary), content_type='application/json')
+
+        except Exception as e:
+            logger.error(f"Dashboard summary API error: {e}")
+            return Response(status=500, text=json.dumps({"error": "Internal server error"}),
+                          content_type='application/json')
+
+    async def _handle_api_status_grid(self, request: Request) -> Response:
+        """API endpoint for streamer status grid data."""
+        try:
+            if not self.database_service:
+                return Response(status=503, text=json.dumps({"error": "Database service unavailable"}),
+                              content_type='application/json')
+
+            status_grid = await self.database_service.get_streamer_status_grid()
+
+            # Convert datetime objects to ISO strings for JSON serialization
+            for streamer in status_grid:
+                if streamer.get('last_seen'):
+                    streamer['last_seen'] = streamer['last_seen'].isoformat()
+
+            return Response(text=json.dumps(status_grid), content_type='application/json')
+
+        except Exception as e:
+            logger.error(f"Status grid API error: {e}")
+            return Response(status=500, text=json.dumps({"error": "Internal server error"}),
+                          content_type='application/json')
+
+    async def _handle_api_recent_activity(self, request: Request) -> Response:
+        """API endpoint for recent activity feed."""
+        try:
+            if not self.database_service:
+                return Response(status=503, text=json.dumps({"error": "Database service unavailable"}),
+                              content_type='application/json')
+
+            # Get limit from query params (default 25)
+            limit = min(int(request.query.get('limit', 25)), 100)  # Cap at 100
+
+            recent_events = await self.database_service.get_recent_status_events(limit)
+
+            # Convert datetime objects to ISO strings
+            for event in recent_events:
+                if event.get('event_timestamp'):
+                    event['event_timestamp'] = event['event_timestamp'].isoformat()
+
+            return Response(text=json.dumps(recent_events), content_type='application/json')
+
+        except Exception as e:
+            logger.error(f"Recent activity API error: {e}")
+            return Response(status=500, text=json.dumps({"error": "Internal server error"}),
+                          content_type='application/json')
+
+    async def _handle_api_system_health(self, request: Request) -> Response:
+        """API endpoint for system health metrics."""
+        try:
+            if not self.database_service:
+                return Response(status=503, text=json.dumps({
+                    "database_status": "disconnected",
+                    "error": "Database service unavailable"
+                }), content_type='application/json')
+
+            health_metrics = await self.database_service.get_system_health_metrics()
+            return Response(text=json.dumps(health_metrics), content_type='application/json')
+
+        except Exception as e:
+            logger.error(f"System health API error: {e}")
+            # Return partial health info even on error
+            health_data = {
+                "database_status": "error",
+                "error": str(e),
+                "last_health_check": datetime.now(timezone.utc).isoformat()
+            }
+            return Response(status=500, text=json.dumps(health_data), content_type='application/json')
 
     def _get_register_page_html(self) -> str:
         """Generate the registration page HTML."""
@@ -2658,55 +2750,6 @@ class WebDashboardService:
             background: #ff6600;
             color: #000000;
         }}
-        .assignment-matrix {{
-            border: 1px solid #00ff00;
-            padding: 15px;
-            background: #0f0f0f;
-        }}
-        .assignment-matrix h4 {{
-            color: #00ff00;
-            margin-top: 0;
-        }}
-        .matrix-container {{
-            overflow-x: auto;
-        }}
-        .assignment-grid {{
-            display: grid;
-            grid-template-columns: 150px repeat(auto-fit, minmax(80px, 1fr));
-            gap: 2px;
-            font-size: 11px;
-        }}
-        .matrix-header {{
-            background: #003300;
-            color: #ffff00;
-            padding: 5px;
-            text-align: center;
-            font-weight: bold;
-        }}
-        .matrix-user {{
-            background: #0a0a0a;
-            color: #00ff00;
-            padding: 5px;
-            border-right: 1px solid #333;
-        }}
-        .matrix-cell {{
-            background: #1a1a1a;
-            padding: 5px;
-            text-align: center;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }}
-        .matrix-cell.assigned {{
-            background: #003300;
-            color: #00ff00;
-        }}
-        .matrix-cell.not-assigned {{
-            background: #330000;
-            color: #ff6666;
-        }}
-        .matrix-cell:hover {{
-            background: #333333;
-        }}
         .assignments-cell {{
             max-width: 200px;
             overflow: hidden;
@@ -2855,13 +2898,6 @@ class WebDashboardService:
                     </form>
                 </div>
             </div>
-            
-            <div class="assignment-matrix">
-                <h4>📊 Assignment Overview</h4>
-                <div class="matrix-container" id="assignment-matrix">
-                    Loading assignment data...
-                </div>
-            </div>
         </div>
     </div>
 
@@ -2940,97 +2976,6 @@ class WebDashboardService:
             }} catch (error) {{
                 console.error('Error loading assignments:', error);
                 document.getElementById('unassign_streamer_id').innerHTML = '<option value="">Error loading assignments</option>';
-            }}
-        }}
-
-        // Load assignment matrix
-        async function loadAssignmentMatrix() {{
-            try {{
-                const [usersRes, streamersRes, assignmentsRes] = await Promise.all([
-                    fetch('/api/users'),
-                    fetch('/api/streamers'), 
-                    fetch('/api/assignments')
-                ]);
-
-                // Check for authentication errors
-                if (usersRes.status === 401 || streamersRes.status === 401 || assignmentsRes.status === 401) {{
-                    window.location.href = '/login';
-                    return;
-                }}
-
-                if (!usersRes.ok || !streamersRes.ok || !assignmentsRes.ok) {{
-                    throw new Error('Failed to load data');
-                }}
-
-                const users = await usersRes.json();
-                const streamers = await streamersRes.json();
-                const assignments = await assignmentsRes.json();
-
-                // Create assignment lookup
-                const assignmentMap = new Map();
-                assignments.forEach(a => {{
-                    const key = `${{a.user_id}}-${{a.streamer_id}}`;
-                    assignmentMap.set(key, true);
-                }});
-
-                // Build matrix HTML
-                let matrixHTML = `<div class="assignment-grid" style="grid-template-columns: 150px repeat(${{streamers.length}}, minmax(80px, 1fr));">`;
-
-                // Header row
-                matrixHTML += '<div class="matrix-header">User \\\\ Streamer</div>';
-                streamers.forEach(streamer => {{
-                    matrixHTML += `<div class="matrix-header">${{streamer.username}}</div>`;
-                }});
-
-                // User rows
-                users.filter(u => u.role !== 'admin').forEach(user => {{
-                    matrixHTML += `<div class="matrix-user">${{user.username}}</div>`;
-                    streamers.forEach(streamer => {{
-                        const isAssigned = assignmentMap.has(`${{user.id}}-${{streamer.id}}`);
-                        const cellClass = isAssigned ? 'assigned' : 'not-assigned';
-                        const cellText = isAssigned ? '✓' : '✗';
-                        matrixHTML += `<div class="matrix-cell ${{cellClass}}" 
-                                        onclick="toggleAssignment(${{user.id}}, ${{streamer.id}}, ${{isAssigned}})"
-                                        title="${{user.username}} - ${{streamer.username}}">
-                                        ${{cellText}}
-                                      </div>`;
-                    }});
-                }});
-
-                matrixHTML += '</div>';
-                document.getElementById('assignment-matrix').innerHTML = matrixHTML;
-
-            }} catch (error) {{
-                console.error('Error loading assignment matrix:', error);
-                document.getElementById('assignment-matrix').innerHTML = 'Error loading assignment data';
-            }}
-        }}
-
-        // Toggle assignment via matrix click
-        async function toggleAssignment(userId, streamerId, isCurrentlyAssigned) {{
-            const action = isCurrentlyAssigned ? 'unassign' : 'assign';
-            const url = `/admin/users/${{action}}`;
-            
-            try {{
-                const formData = new FormData();
-                formData.append('user_id', userId);
-                formData.append('streamer_id', streamerId);
-
-                const response = await fetch(url, {{
-                    method: 'POST',
-                    body: formData
-                }});
-
-                if (response.ok) {{
-                    // Reload matrix to show changes
-                    loadAssignmentMatrix();
-                    loadUserAssignmentCounts();
-                }} else {{
-                    alert('Failed to update assignment');
-                }}
-            }} catch (error) {{
-                console.error('Error toggling assignment:', error);
-                alert('Error updating assignment');
             }}
         }}
 
@@ -3165,7 +3110,6 @@ class WebDashboardService:
             // Assignment was modified, refresh everything
             setTimeout(() => {{
                 refreshDropdowns();
-                loadAssignmentMatrix();
                 loadUserAssignmentCounts();
             }}, 500);
         }}
@@ -3180,7 +3124,6 @@ class WebDashboardService:
 
         // Initialize on page load
         refreshDropdowns();
-        loadAssignmentMatrix();
         loadUserAssignmentCounts();
         initializeDropdown();
     </script>
@@ -3188,13 +3131,170 @@ class WebDashboardService:
 </html>'''
 
     def _get_dashboard_html(self) -> str:
-        """Generate the dashboard HTML page."""
+        """Generate the real-time dashboard HTML page."""
         return '''<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kick Streamer Monitor Dashboard</title>
+    <title>Kick Streamer Monitor - Real-Time Dashboard</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #00ff00;
+            margin: 0;
+            padding: 20px;
+            line-height: 1.4;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid #00ff00;
+            padding: 20px;
+            margin-bottom: 20px;
+            background: #0a0a0a;
+        }
+        .header h1 { margin: 0; color: #ffff00; }
+        .system-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ff0000;
+            animation: pulse 2s infinite;
+        }
+        .status-indicator.healthy { background: #00ff00; }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            border: 1px solid #00ff00;
+            padding: 15px;
+            background: #0a0a0a;
+            text-align: center;
+        }
+        .stat-card h3 {
+            color: #ffff00;
+            margin: 0 0 10px 0;
+            font-size: 0.9em;
+            text-transform: uppercase;
+        }
+        .stat-value {
+            font-size: 1.8em;
+            font-weight: bold;
+            margin: 5px 0;
+        }
+        .stat-value.online { color: #00ff00; }
+        .stat-value.offline { color: #ff6666; }
+        .stat-value.unknown { color: #ffff00; }
+        .auth-links {
+            text-align: center;
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #333;
+            background: #0a0a0a;
+        }
+        .auth-links a {
+            color: #00ff00;
+            text-decoration: none;
+            margin: 0 10px;
+        }
+        .auth-links a:hover { color: #ffff00; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Kick Streamer Monitor</h1>
+            <div class="system-status">
+                <div class="status-indicator" id="system-status"></div>
+                <span id="status-text">Connecting...</span>
+            </div>
+        </div>
+        <div class="stats-grid" id="stats-grid">
+            <div class="stat-card">
+                <h3>Total Streamers</h3>
+                <div class="stat-value" id="total-streamers">--</div>
+            </div>
+            <div class="stat-card">
+                <h3>Online Now</h3>
+                <div class="stat-value online" id="online-streamers">--</div>
+            </div>
+            <div class="stat-card">
+                <h3>Offline</h3>
+                <div class="stat-value offline" id="offline-streamers">--</div>
+            </div>
+            <div class="stat-card">
+                <h3>Status Unknown</h3>
+                <div class="stat-value unknown" id="unknown-streamers">--</div>
+            </div>
+            <div class="stat-card">
+                <h3>Active Users</h3>
+                <div class="stat-value" id="active-users">--</div>
+            </div>
+            <div class="stat-card">
+                <h3>Changes (24h)</h3>
+                <div class="stat-value" id="recent-changes">--</div>
+            </div>
+        </div>
+        <div class="auth-links">
+            <a href="/login">Admin Login</a> |
+            <a href="/register">Register Account</a> |
+            <a href="/admin">Admin Dashboard</a>
+        </div>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            loadDashboardData();
+            setInterval(loadDashboardData, 30000);
+        });
+
+        async function loadDashboardData() {
+            try {
+                const summary = await fetch('/api/dashboard/summary').then(r => r.json());
+                updateSummaryStats(summary);
+                updateSystemStatus('healthy');
+            } catch (error) {
+                console.error('Failed to load dashboard data:', error);
+                updateSystemStatus('error');
+            }
+        }
+
+        function updateSummaryStats(data) {
+            document.getElementById('total-streamers').textContent = data.total_streamers || 0;
+            document.getElementById('online-streamers').textContent = data.online_streamers || 0;
+            document.getElementById('offline-streamers').textContent = data.offline_streamers || 0;
+            document.getElementById('unknown-streamers').textContent = data.unknown_streamers || 0;
+            document.getElementById('active-users').textContent = data.active_users || 0;
+            document.getElementById('recent-changes').textContent = data.recent_changes_24h || 0;
+        }
+
+        function updateSystemStatus(status) {
+            const indicator = document.getElementById('system-status');
+            const text = document.getElementById('status-text');
+            indicator.className = `status-indicator ${status}`;
+            text.textContent = status === 'healthy' ? 'System Operational' : 'Connection Issues';
+        }
+    </script>
+</body>
+</html>'''
+
+    @property
     <style>
         body {
             font-family: 'Courier New', monospace;

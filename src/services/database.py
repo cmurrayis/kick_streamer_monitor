@@ -359,10 +359,21 @@ class DatabaseService:
             return Streamer(**dict(record)) if record else None
     
     async def delete_streamer(self, streamer_id: int) -> bool:
-        """Delete streamer record."""
+        """Delete streamer record (and cascade assignments)."""
         async with self.transaction() as conn:
+            # Log assignment count before deletion for audit trail
+            assignment_count_query = "SELECT COUNT(*) FROM user_streamer_assignments WHERE streamer_id = $1"
+            assignment_count = await conn.fetchval(assignment_count_query, streamer_id)
+
+            if assignment_count > 0:
+                logger.info(f"Deleting streamer {streamer_id} will cascade delete {assignment_count} user assignments")
+
             query = "DELETE FROM streamer WHERE id = $1"
             result = await conn.execute(query, streamer_id)
+
+            if result == "DELETE 1" and assignment_count > 0:
+                logger.info(f"Successfully deleted streamer {streamer_id} and cascaded {assignment_count} assignments")
+
             return result == "DELETE 1"
     
     async def get_streamer_count(self) -> int:
@@ -1013,8 +1024,19 @@ class DatabaseService:
     async def delete_user(self, user_id: int) -> bool:
         """Delete user account (and cascade assignments)."""
         async with self.transaction() as conn:
+            # Log assignment count before deletion for audit trail
+            assignment_count_query = "SELECT COUNT(*) FROM user_streamer_assignments WHERE user_id = $1"
+            assignment_count = await conn.fetchval(assignment_count_query, user_id)
+
+            if assignment_count > 0:
+                logger.info(f"Deleting user {user_id} will cascade delete {assignment_count} streamer assignments")
+
             query = "DELETE FROM users WHERE id = $1"
             result = await conn.execute(query, user_id)
+
+            if result == "DELETE 1" and assignment_count > 0:
+                logger.info(f"Successfully deleted user {user_id} and cascaded {assignment_count} assignments")
+
             return result == "DELETE 1"
     
     # =========================================================================
@@ -1124,3 +1146,110 @@ class DatabaseService:
             
             records = await conn.fetch(query)
             return [dict(record) for record in records]
+
+    # =========================================================================
+    # DASHBOARD AND ANALYTICS OPERATIONS
+    # =========================================================================
+
+    async def get_dashboard_summary(self) -> Dict[str, Any]:
+        """Get dashboard summary statistics."""
+        async with self.get_connection() as conn:
+            # Get basic counts
+            stats_query = """
+            SELECT
+                (SELECT COUNT(*) FROM streamer) as total_streamers,
+                (SELECT COUNT(*) FROM streamer WHERE status = 'online') as online_streamers,
+                (SELECT COUNT(*) FROM streamer WHERE status = 'offline') as offline_streamers,
+                (SELECT COUNT(*) FROM streamer WHERE status = 'unknown') as unknown_streamers,
+                (SELECT COUNT(*) FROM users WHERE status = 'active') as active_users,
+                (SELECT COUNT(*) FROM user_streamer_assignments) as total_assignments
+            """
+
+            stats = await conn.fetchrow(stats_query)
+
+            # Get recent activity count (last 24 hours)
+            recent_activity_query = """
+            SELECT COUNT(*) as recent_changes
+            FROM status_event
+            WHERE event_timestamp >= NOW() - INTERVAL '24 hours'
+            """
+
+            recent_activity = await conn.fetchval(recent_activity_query)
+
+            return {
+                "total_streamers": stats["total_streamers"],
+                "online_streamers": stats["online_streamers"],
+                "offline_streamers": stats["offline_streamers"],
+                "unknown_streamers": stats["unknown_streamers"],
+                "active_users": stats["active_users"],
+                "total_assignments": stats["total_assignments"],
+                "recent_changes_24h": recent_activity or 0,
+                "last_updated": datetime.now(timezone.utc).isoformat()
+            }
+
+    async def get_recent_status_events(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Get recent status change events with streamer details."""
+        async with self.get_connection() as conn:
+            query = """
+            SELECT se.id, se.event_type, se.event_timestamp, se.metadata,
+                   s.username, s.kick_user_id, s.status as current_status
+            FROM status_event se
+            JOIN streamer s ON se.streamer_id = s.id
+            ORDER BY se.event_timestamp DESC
+            LIMIT $1
+            """
+
+            records = await conn.fetch(query, limit)
+            return [dict(record) for record in records]
+
+    async def get_streamer_status_grid(self) -> List[Dict[str, Any]]:
+        """Get streamers with their current status for dashboard grid."""
+        async with self.get_connection() as conn:
+            query = """
+            SELECT s.id, s.username, s.kick_user_id, s.status, s.last_seen,
+                   s.profile_picture, s.follower_count, s.is_verified,
+                   COUNT(usa.user_id) as assigned_users_count
+            FROM streamer s
+            LEFT JOIN user_streamer_assignments usa ON s.id = usa.streamer_id
+            GROUP BY s.id, s.username, s.kick_user_id, s.status, s.last_seen,
+                     s.profile_picture, s.follower_count, s.is_verified
+            ORDER BY s.status DESC, s.username ASC
+            """
+
+            records = await conn.fetch(query)
+            return [dict(record) for record in records]
+
+    async def get_system_health_metrics(self) -> Dict[str, Any]:
+        """Get system health and performance metrics."""
+        async with self.get_connection() as conn:
+            # Get database connection info
+            db_query = "SELECT COUNT(*) as active_connections FROM pg_stat_activity WHERE state = 'active'"
+            active_connections = await conn.fetchval(db_query)
+
+            # Get latest successful status checks
+            latest_check_query = """
+            SELECT MAX(event_timestamp) as last_status_change
+            FROM status_event
+            WHERE event_timestamp >= NOW() - INTERVAL '1 hour'
+            """
+
+            last_change = await conn.fetchval(latest_check_query)
+
+            # Check for recent errors (placeholder - would integrate with actual error tracking)
+            error_count_query = """
+            SELECT COUNT(*) as error_count
+            FROM status_event
+            WHERE event_timestamp >= NOW() - INTERVAL '1 hour'
+            AND metadata::text LIKE '%error%'
+            """
+
+            error_count = await conn.fetchval(error_count_query)
+
+            return {
+                "database_status": "connected",
+                "active_db_connections": active_connections,
+                "last_status_change": last_change.isoformat() if last_change else None,
+                "recent_errors": error_count or 0,
+                "system_uptime": "operational",  # Would calculate actual uptime
+                "last_health_check": datetime.now(timezone.utc).isoformat()
+            }
