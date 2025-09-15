@@ -465,13 +465,26 @@ class WebDashboardService:
             
             if not streamer_id:
                 return Response(status=400, text="Streamer ID required")
-            
+
+            # Check if database service is available
+            if not self.database_service:
+                logger.error("Database service not available")
+                response = Response(status=302)
+                response.headers['Location'] = '/admin/streamers?error=database_unavailable'
+                return response
+
             # Remove streamer via database service
             logger.info(f"Admin {user_info.username} removing streamer ID: {streamer_id}")
-            
-            response = Response(status=302)
-            response.headers['Location'] = '/admin/streamers?success=removed'
-            return response
+            success = await self.database_service.delete_streamer(int(streamer_id))
+
+            if success:
+                response = Response(status=302)
+                response.headers['Location'] = '/admin/streamers?success=removed'
+                return response
+            else:
+                response = Response(status=302)
+                response.headers['Location'] = '/admin/streamers?error=remove_failed'
+                return response
             
         except Exception as e:
             logger.error(f"Remove streamer error: {e}")

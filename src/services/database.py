@@ -383,20 +383,49 @@ class DatabaseService:
             if existing:
                 logger.warning(f"Streamer {username} already exists")
                 return False
-            
-            # Create new streamer record
+
+            # Fetch streamer data from Kick API
+            kick_data = await self._fetch_kick_channel_data(username)
+            if not kick_data:
+                logger.error(f"Failed to fetch channel data for {username} from Kick API")
+                return False
+
+            # Create new streamer record with real data from Kick API
             streamer_create = StreamerCreate(
-                kick_user_id=f"user_{username}",  # Placeholder until we get real ID from API
-                username=username,
-                display_name=username,
+                kick_user_id=str(kick_data.get('id')),
+                username=kick_data.get('slug', username),
+                display_name=kick_data.get('user', {}).get('username', username),
                 status=StreamerStatus.UNKNOWN
             )
-            
+
             result = await self.create_streamer(streamer_create)
             return result is not None
         except Exception as e:
             logger.error(f"Error adding streamer {username}: {e}")
             return False
+
+    async def _fetch_kick_channel_data(self, username: str) -> dict:
+        """Fetch channel data from Kick API."""
+        import aiohttp
+        try:
+            async with aiohttp.ClientSession() as session:
+                url = f"https://kick.com/api/v1/channels/{username}"
+                logger.info(f"Fetching channel data from: {url}")
+
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        logger.info(f"Successfully fetched channel data for {username}: ID={data.get('id')}")
+                        return data
+                    elif response.status == 404:
+                        logger.error(f"Channel {username} not found on Kick.com")
+                        return None
+                    else:
+                        logger.error(f"Failed to fetch channel data for {username}: HTTP {response.status}")
+                        return None
+        except Exception as e:
+            logger.error(f"Error fetching channel data for {username}: {e}")
+            return None
     
     async def update_streamer_profile_data(self, streamer_id: int, profile_data: dict) -> Optional[Streamer]:
         """Update streamer profile data (bio, profile picture, etc.)."""
