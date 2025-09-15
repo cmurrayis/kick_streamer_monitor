@@ -289,8 +289,10 @@ class DatabaseService:
         """Get all active streamers."""
         async with self.get_connection() as conn:
             query = """
-            SELECT id, kick_user_id, username, display_name, status, 
-                   last_seen_online, last_status_update, created_at, updated_at, is_active
+            SELECT id, kick_user_id, username, display_name, status,
+                   last_seen_online, last_status_update, created_at, updated_at, is_active,
+                   current_viewers, peak_viewers, avg_viewers, livestream_id,
+                   profile_picture_url, bio, follower_count, is_live, is_verified
             FROM streamer WHERE is_active = true
             ORDER BY username
             """

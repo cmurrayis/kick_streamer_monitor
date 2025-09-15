@@ -29,23 +29,38 @@ Real-time monitoring service that tracks Kick.com streamer online/offline status
    cd kick-streamer-monitor
    ```
 
-2. **Install dependencies**
+2. **Create virtual environment**
+   ```bash
+   python -m venv myenv
+   source myenv/bin/activate  # On Windows: myenv\Scripts\activate
+   ```
+
+3. **Install dependencies**
    ```bash
    pip install -r requirements.txt
    ```
 
-3. **Install the package**
+4. **Install the package**
    ```bash
    pip install -e .
    ```
 
-4. **Configure environment**
+5. **Install Playwright browsers**
+   ```bash
+   # Install system dependencies for browsers
+   playwright install-deps
+
+   # Install browser binaries
+   playwright install chromium
+   ```
+
+6. **Configure environment**
    ```bash
    cp .env.example .env
    # Edit .env with your Kick.com API credentials and database settings
    ```
 
-5. **Setup database**
+7. **Setup database**
    ```bash
    # Create PostgreSQL database and user
    sudo -u postgres psql
@@ -53,21 +68,21 @@ Real-time monitoring service that tracks Kick.com streamer online/offline status
    CREATE USER kick_monitor_user WITH PASSWORD 'your_password';
    GRANT ALL PRIVILEGES ON DATABASE kick_monitor TO kick_monitor_user;
    \q
-   
+
    # Initialize database schema
    kick-monitor db migrate
    ```
 
-6. **Validate configuration**
+8. **Validate configuration**
    ```bash
    kick-monitor config validate
    ```
 
-7. **Start monitoring**
+9. **Start monitoring**
    ```bash
    # Interactive manual mode
    kick-monitor start --manual
-   
+
    # Background service mode
    kick-monitor start --daemon
    ```
@@ -353,7 +368,18 @@ bandit -r src/
 
 ### Systemd Service (Linux)
 
-1. **Create service file** `/etc/systemd/system/kick-monitor.service`:
+1. **Create service user**:
+   ```bash
+   sudo useradd --system --home /scripts/kick_streamer_monitor --shell /bin/bash kick-monitor
+   sudo chown -R kick-monitor:kick-monitor /scripts/kick_streamer_monitor
+   ```
+
+2. **Install Playwright browsers for service user**:
+   ```bash
+   sudo -u kick-monitor bash -c "cd /scripts/kick_streamer_monitor && source myenv/bin/activate && playwright install-deps && playwright install chromium"
+   ```
+
+3. **Create service file** `/etc/systemd/system/kick-monitor.service`:
    ```ini
    [Unit]
    Description=Kick Streamer Status Monitor
@@ -364,9 +390,9 @@ bandit -r src/
    Type=exec
    User=kick-monitor
    Group=kick-monitor
-   WorkingDirectory=/opt/kick-monitor
-   Environment=PATH=/opt/kick-monitor/venv/bin
-   ExecStart=/opt/kick-monitor/venv/bin/kick-monitor start --daemon
+   WorkingDirectory=/scripts/kick_streamer_monitor
+   Environment=PATH=/scripts/kick_streamer_monitor/myenv/bin
+   ExecStart=/scripts/kick_streamer_monitor/myenv/bin/kick-monitor start --daemon --web-dashboard --simple-mode
    ExecReload=/bin/kill -HUP $MAINPID
    Restart=always
    RestartSec=5
@@ -377,11 +403,17 @@ bandit -r src/
    WantedBy=multi-user.target
    ```
 
-2. **Enable and start service**:
+4. **Enable and start service**:
    ```bash
    sudo systemctl daemon-reload
    sudo systemctl enable kick-monitor.service
    sudo systemctl start kick-monitor.service
+
+   # Check service status
+   sudo systemctl status kick-monitor.service
+
+   # View logs
+   sudo journalctl -xeu kick-monitor.service -f
    ```
 
 ### Docker Deployment
@@ -544,12 +576,27 @@ The application exports metrics for monitoring:
    ```bash
    # Check network connectivity
    telnet ws-us2.pusher.com 443
-   
+
    # Monitor WebSocket logs
    tail -f logs/kick-monitor.log | grep websocket
    ```
 
-4. **Performance Issues**
+4. **Playwright Browser Issues**
+   ```bash
+   # Verify browser installation
+   playwright install chromium
+
+   # For systemd service, install for service user
+   sudo -u kick-monitor bash -c "cd /path/to/project && source venv/bin/activate && playwright install chromium"
+
+   # Install system dependencies
+   playwright install-deps
+
+   # Check browser paths
+   ls -la ~/.cache/ms-playwright/
+   ```
+
+5. **Performance Issues**
    ```bash
    # Monitor resource usage
    htop
