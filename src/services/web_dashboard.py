@@ -323,7 +323,24 @@ class WebDashboardService:
             response.headers['Location'] = '/login?error=session_expired'
             return response
         return None
-    
+
+    def _get_user_session(self, request: Request) -> Optional[UserSession]:
+        """Get valid user session (any role) or None."""
+        try:
+            session_token = request.cookies.get('session_token')
+            if not session_token:
+                return None
+
+            valid, user_session = self.auth_manager.validate_session(session_token)
+            if valid:
+                return user_session
+
+            return None
+
+        except Exception as e:
+            logger.error(f"User session check error: {e}")
+            return None
+
     async def _handle_register_page(self, request: Request) -> Response:
         """Serve the registration page."""
         html_content = self._get_register_page_html()

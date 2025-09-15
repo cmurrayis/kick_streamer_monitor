@@ -57,6 +57,7 @@ class UserUpdate(BaseModel):
     display_name: Optional[str] = Field(None, max_length=100)
     role: Optional[UserRole] = None
     status: Optional[UserStatus] = None
+    password_hash: Optional[str] = None
 
 
 class UserStreamerAssignment(BaseModel):
