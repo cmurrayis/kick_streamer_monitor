@@ -2994,8 +2994,8 @@ class WebDashboardService:
             }};
 
             if (success === 'password_reset') {{
-                const username = urlParams.get('username');
-                const password = urlParams.get('password');
+                const username = usersUrlParams.get('username');
+                const password = usersUrlParams.get('password');
                 if (username && password) {{
                     messageContainer.innerHTML = `<div class="success-message">Password reset successfully for user <strong>${{username}}</strong>!<br>New temporary password: <strong style="background: #333; padding: 2px 4px; font-family: monospace;">${{password}}</strong><br><small>User should change this password after logging in.</small></div>`;
                 }} else {{
