@@ -677,10 +677,10 @@ class WebDashboardService:
             logger.info(f"Admin {user_session.username} refreshing data for streamer: {streamer.username}")
             
             # Fetch profile data from Kick.com API
-            if hasattr(self.monitor_service, 'auth_service'):
+            if hasattr(self.monitor_service, 'oauth_service'):
                 try:
                     # Get channel info from Kick API
-                    channel_info = await self.monitor_service.auth_service.get_channel_info(streamer.username)
+                    channel_info = await self.monitor_service.oauth_service.get_channel_info(streamer.username)
                     
                     if channel_info:
                         # Extract profile data
@@ -722,7 +722,7 @@ class WebDashboardService:
                     response.headers['Location'] = '/admin/streamers?error=api_failed'
                     return response
             else:
-                logger.error("No auth service available for API calls")
+                logger.error("No OAuth service available for API calls")
                 response = Response(status=302)
                 response.headers['Location'] = '/admin/streamers?error=no_api'
                 return response
@@ -2019,8 +2019,9 @@ class WebDashboardService:
                     viewer_display = "-"
 
                 # Generate profile picture HTML
-                if hasattr(streamer, 'profile_picture_url') and streamer.profile_picture_url:
-                    profile_pic = f'<img src="{streamer.profile_picture_url}" alt="{streamer.username}" style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid #00ff00; object-fit: cover;">'
+                profile_url = getattr(streamer, 'profile_picture_url', None)
+                if profile_url and profile_url.strip():
+                    profile_pic = f'<img src="{profile_url}" alt="{streamer.username}" style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid #00ff00; object-fit: cover;">'
                 else:
                     profile_pic = f'<div style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid #00ff00; background: #003300; display: flex; align-items: center; justify-content: center; color: #00ff00; font-size: 12px;">{streamer.username[0].upper()}</div>'
 
