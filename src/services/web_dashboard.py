@@ -1468,9 +1468,9 @@ class WebDashboardService:
 
     <script>
         // Check for messages in URL params
-        const urlParams = new URLSearchParams(window.location.search);
-        const error = urlParams.get('error');
-        const message = urlParams.get('message');
+        const registerUrlParams = new URLSearchParams(window.location.search);
+        const error = registerUrlParams.get('error');
+        const message = registerUrlParams.get('message');
         const messageContainer = document.getElementById('message-container');
 
         if (error) {
@@ -2373,9 +2373,9 @@ class WebDashboardService:
 
     <script>
         // Check for messages in URL params
-        const urlParams = new URLSearchParams(window.location.search);
-        const success = urlParams.get('success');
-        const error = urlParams.get('error');
+        const streamersUrlParams = new URLSearchParams(window.location.search);
+        const success = streamersUrlParams.get('success');
+        const error = streamersUrlParams.get('error');
         const messageContainer = document.getElementById('message-container');
 
         if (success) {
@@ -2867,9 +2867,9 @@ class WebDashboardService:
 
     <script>
         // Check for messages in URL params
-        const urlParams = new URLSearchParams(window.location.search);
-        const success = urlParams.get('success');
-        const error = urlParams.get('error');
+        const usersUrlParams = new URLSearchParams(window.location.search);
+        const success = usersUrlParams.get('success');
+        const error = usersUrlParams.get('error');
         const messageContainer = document.getElementById('message-container');
 
         if (success) {{
@@ -3147,8 +3147,8 @@ class WebDashboardService:
         }}
 
         // Check for successful operations and refresh
-        const urlParams = new URLSearchParams(window.location.search);
-        const success = urlParams.get('success');
+        const refreshUrlParams = new URLSearchParams(window.location.search);
+        const success = refreshUrlParams.get('success');
         if (success === 'added') {{
             // User was just created, refresh the dropdowns
             setTimeout(refreshDropdowns, 500);
