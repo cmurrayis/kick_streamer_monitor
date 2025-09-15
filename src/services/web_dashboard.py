@@ -15,7 +15,7 @@ from urllib.parse import parse_qs
 from aiohttp import web, WSMsgType
 from aiohttp.web import Request, Response, WebSocketResponse
 from .auth_manager import AuthManager
-from models.user import UserRole, UserSession
+from models.user import UserRole, UserSession, UserStatus
 
 logger = logging.getLogger(__name__)
 
