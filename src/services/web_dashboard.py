@@ -455,7 +455,7 @@ class WebDashboardService:
     
     async def _handle_remove_streamer(self, request: Request) -> Response:
         """Handle removing a streamer."""
-        user_info = await self._require_admin(request)
+        user_info = self._require_admin(request)
         if not user_info:
             return Response(status=401, text="Unauthorized")
         
@@ -481,7 +481,7 @@ class WebDashboardService:
     
     async def _handle_toggle_streamer(self, request: Request) -> Response:
         """Handle toggling streamer monitoring status."""
-        user_info = await self._require_admin(request)
+        user_info = self._require_admin(request)
         if not user_info:
             return Response(status=401, text="Unauthorized")
         

@@ -511,8 +511,8 @@ class DatabaseService:
                 
                 if not record:
                     raise DatabaseError("Failed to create status event record")
-                
-                return StatusEvent(**dict(record))
+
+                return self._convert_status_event_record(record)
                 
             except Exception as e:
                 logger.error(f"Error creating status event: {e}")
@@ -523,13 +523,16 @@ class DatabaseService:
         async with self.get_connection() as conn:
             query = """
             SELECT id, streamer_id, event_type, previous_status, new_status,
-                   kick_event_id, event_timestamp, received_timestamp, 
+                   kick_event_id, event_timestamp, received_timestamp,
                    processed_timestamp, event_data, created_at
             FROM status_event WHERE id = $1
             """
-            
+
             record = await conn.fetchrow(query, event_id)
-            return StatusEvent(**dict(record)) if record else None
+            if not record:
+                return None
+
+            return self._convert_status_event_record(record)
     
     async def query_status_events(self, query: StatusEventQuery) -> List[StatusEvent]:
         """Query status events with filters."""
@@ -591,7 +594,7 @@ class DatabaseService:
         
         async with self.get_connection() as conn:
             records = await conn.fetch(sql_query, *values)
-            return [StatusEvent(**dict(record)) for record in records]
+            return [self._convert_status_event_record(record) for record in records]
     
     async def mark_event_processed(self, event_id: int, timestamp: Optional[datetime] = None) -> Optional[StatusEvent]:
         """Mark status event as processed."""
@@ -608,7 +611,10 @@ class DatabaseService:
             """
             
             record = await conn.fetchrow(query, event_id, process_time)
-            return StatusEvent(**dict(record)) if record else None
+            if not record:
+                return None
+
+            return self._convert_status_event_record(record)
     
     async def get_recent_events(self, limit: int = 100) -> List[StatusEvent]:
         """Get most recent status events."""
@@ -623,8 +629,18 @@ class DatabaseService:
             """
             
             records = await conn.fetch(query, limit)
-            return [StatusEvent(**dict(record)) for record in records]
+            return [self._convert_status_event_record(record) for record in records]
     
+    def _convert_status_event_record(self, record) -> StatusEvent:
+        """Convert database record to StatusEvent object with proper event_data parsing."""
+        record_dict = dict(record)
+        if record_dict.get('event_data'):
+            try:
+                record_dict['event_data'] = json.loads(record_dict['event_data'])
+            except (json.JSONDecodeError, TypeError):
+                record_dict['event_data'] = None
+        return StatusEvent(**record_dict)
+
     # =========================================================================
     # CONFIGURATION OPERATIONS
     # =========================================================================
