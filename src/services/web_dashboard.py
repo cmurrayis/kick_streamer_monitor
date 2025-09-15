@@ -3148,11 +3148,11 @@ class WebDashboardService:
 
         // Check for successful operations and refresh
         const refreshUrlParams = new URLSearchParams(window.location.search);
-        const success = refreshUrlParams.get('success');
-        if (success === 'added') {{
+        const refreshSuccess = refreshUrlParams.get('success');
+        if (refreshSuccess === 'added') {{
             // User was just created, refresh the dropdowns
             setTimeout(refreshDropdowns, 500);
-        }} else if (success === 'assigned' || success === 'unassigned') {{
+        }} else if (refreshSuccess === 'assigned' || refreshSuccess === 'unassigned') {{
             // Assignment was modified, refresh everything
             setTimeout(() => {{
                 refreshDropdowns();
