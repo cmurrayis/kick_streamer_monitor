@@ -89,6 +89,7 @@ class WebDashboardService:
             self.app.router.add_post('/admin/users/add', self._handle_add_user)
             self.app.router.add_post('/admin/users/delete', self._handle_delete_user)
             self.app.router.add_post('/admin/users/toggle-status', self._handle_toggle_user_status)
+            self.app.router.add_post('/admin/users/reset-password', self._handle_reset_user_password)
             self.app.router.add_post('/admin/users/assign', self._handle_assign_streamer)
             self.app.router.add_post('/admin/users/unassign', self._handle_unassign_streamer)
             
@@ -934,6 +935,75 @@ class WebDashboardService:
             response.headers['Location'] = '/admin/users?error=status_update_failed'
             return response
 
+    async def _handle_reset_user_password(self, request: Request) -> Response:
+        """Handle resetting user password to a default value."""
+        redirect = self._require_admin_redirect(request)
+        if redirect:
+            return redirect
+
+        user_session = self._require_admin(request)
+
+        try:
+            data = await request.post()
+            user_id = int(data.get('user_id', 0))
+
+            if not user_id:
+                response = Response(status=302)
+                response.headers['Location'] = '/admin/users?error=missing_user_id'
+                return response
+
+            # Check if database service is available
+            if not self.database_service:
+                logger.error("Database service not available")
+                response = Response(status=302)
+                response.headers['Location'] = '/admin/users?error=database_unavailable'
+                return response
+
+            # Get user info before password reset
+            user_to_update = await self.database_service.get_user_by_id(user_id)
+            if not user_to_update:
+                response = Response(status=302)
+                response.headers['Location'] = '/admin/users?error=user_not_found'
+                return response
+
+            # Prevent password reset of admin users by non-admin
+            if user_to_update.role == UserRole.ADMIN and user_session.user_role != UserRole.ADMIN:
+                response = Response(status=302)
+                response.headers['Location'] = '/admin/users?error=cannot_modify_admin'
+                return response
+
+            # Generate default password (could be improved with random generation)
+            default_password = "TempPass123!"
+
+            # Hash the new password
+            import hashlib
+            password_hash = hashlib.sha256((default_password + "kick_monitor_salt").encode()).hexdigest()
+
+            # Update user password
+            from models.user import UserUpdate
+            update_data = UserUpdate(password_hash=password_hash)
+            updated_user = await self.database_service.update_user(user_id, update_data)
+
+            if updated_user:
+                logger.info(f"Admin {user_session.username} reset password for user: {user_to_update.username}")
+                response = Response(status=302)
+                response.headers['Location'] = f'/admin/users?success=password_reset&username={user_to_update.username}&password={default_password}'
+                return response
+            else:
+                response = Response(status=302)
+                response.headers['Location'] = '/admin/users?error=password_reset_failed'
+                return response
+
+        except ValueError:
+            response = Response(status=302)
+            response.headers['Location'] = '/admin/users?error=invalid_user_id'
+            return response
+        except Exception as e:
+            logger.error(f"Reset password error: {e}")
+            response = Response(status=302)
+            response.headers['Location'] = '/admin/users?error=password_reset_failed'
+            return response
+
     async def _handle_assign_streamer(self, request: Request) -> Response:
         """Handle assigning a streamer to a user."""
         user_session = self._require_admin(request)
@@ -1140,8 +1210,11 @@ class WebDashboardService:
     
     async def _handle_api_assignments_summary(self, request: Request) -> Response:
         """API endpoint to get assignment summary for all users."""
+        logger.info("Assignment summary API called")
+
         user_session = self._require_admin(request)
         if not user_session:
+            logger.warning("Assignment summary API: Unauthorized access attempt")
             return Response(status=401, text="Unauthorized")
 
         # Check if database service is available
@@ -2396,6 +2469,15 @@ class WebDashboardService:
                     </form>
                 '''
 
+                # Reset password button
+                reset_password_button = f'''
+                    <form method="post" action="/admin/users/reset-password" style="display: inline;"
+                          onsubmit="return confirm('Are you sure you want to reset password for user {user.username}? They will need to use the new temporary password.')">
+                        <input type="hidden" name="user_id" value="{user.id}">
+                        <button type="submit" class="action-btn" style="padding: 5px 10px; font-size: 12px; margin-right: 5px; background: #ff9500; border-color: #ff9500;">RESET PWD</button>
+                    </form>
+                '''
+
                 # Delete button
                 delete_button = f'''
                     <form method="post" action="/admin/users/delete" style="display: inline;"
@@ -2404,7 +2486,7 @@ class WebDashboardService:
                         <button type="submit" class="remove-btn" style="padding: 5px 10px; font-size: 12px;">DELETE</button>
                     </form>
                 '''
-                action_buttons = toggle_button + delete_button
+                action_buttons = toggle_button + reset_password_button + delete_button
             else:
                 action_buttons = '<span style="color: #666;">Protected</span>'
             
@@ -2782,9 +2864,23 @@ class WebDashboardService:
                 'added': 'User created successfully!',
                 'assigned': 'Streamer assigned successfully!',
                 'unassigned': 'Streamer unassigned successfully!',
-                'deleted': 'User deleted successfully!'
+                'deleted': 'User deleted successfully!',
+                'enabled': 'User enabled successfully!',
+                'disabled': 'User disabled successfully!',
+                'password_reset': 'Password reset successfully!'
             }};
-            messageContainer.innerHTML = `<div class="success-message">${{messages[success] || 'Operation successful!'}}</div>`;
+
+            if (success === 'password_reset') {{
+                const username = urlParams.get('username');
+                const password = urlParams.get('password');
+                if (username && password) {{
+                    messageContainer.innerHTML = `<div class="success-message">Password reset successfully for user <strong>${{username}}</strong>!<br>New temporary password: <strong style="background: #333; padding: 2px 4px; font-family: monospace;">${{password}}</strong><br><small>User should change this password after logging in.</small></div>`;
+                }} else {{
+                    messageContainer.innerHTML = `<div class="success-message">${{messages[success]}}</div>`;
+                }}
+            }} else {{
+                messageContainer.innerHTML = `<div class="success-message">${{messages[success] || 'Operation successful!'}}</div>`;
+            }}
         }} else if (error) {{
             const messages = {{
                 'add_failed': 'Failed to create user. Please try again.',
@@ -2796,7 +2892,11 @@ class WebDashboardService:
                 'missing_user_id': 'Invalid user ID provided.',
                 'user_not_found': 'User not found.',
                 'cannot_delete_admin': 'Cannot delete admin users.',
-                'delete_failed': 'Failed to delete user. Please try again.'
+                'cannot_modify_admin': 'Cannot modify admin users.',
+                'delete_failed': 'Failed to delete user. Please try again.',
+                'status_update_failed': 'Failed to update user status. Please try again.',
+                'password_reset_failed': 'Failed to reset password. Please try again.',
+                'database_unavailable': 'Database service is currently unavailable.'
             }};
             messageContainer.innerHTML = `<div class="error-message">${{messages[error] || 'Operation failed!'}}</div>`;
         }}

@@ -13,8 +13,14 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
+try:
+    from dotenv import load_dotenv
+    DOTENV_AVAILABLE = True
+except ImportError:
+    DOTENV_AVAILABLE = False
+
 from .config import ConfigCommands
-from .streamers import StreamerCommands  
+from .streamers import StreamerCommands
 from .service import ServiceCommands
 from .database import DatabaseCommands
 from lib.logging import setup_logging
@@ -461,15 +467,31 @@ Report issues at: https://github.com/your-org/kick-monitor/issues
 
 async def run_command(args: argparse.Namespace) -> int:
     """Run the appropriate command based on parsed arguments."""
-    
-    # Handle global options
+
+    # Load .env file if available
+    if DOTENV_AVAILABLE:
+        # Look for .env file in current directory and parent directories
+        env_file = Path('.env')
+        if not env_file.exists():
+            # Try parent directory (for when running from src/ or other subdirs)
+            env_file = Path('../.env')
+        if env_file.exists():
+            load_dotenv(env_file)
+
+    # Determine logging level - priority: CLI args > ENV var > default
     if args.verbose:
         log_level = logging.DEBUG
     elif args.quiet:
         log_level = logging.WARNING
     else:
-        log_level = logging.INFO
-    
+        # Check environment variable for LOG_LEVEL
+        env_log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
+        try:
+            log_level = getattr(logging, env_log_level)
+        except AttributeError:
+            log_level = logging.INFO
+            print(f"Warning: Invalid LOG_LEVEL '{env_log_level}' in environment, using INFO", file=sys.stderr)
+
     # Setup logging
     level_name = logging.getLevelName(log_level)
     setup_logging(level=level_name)
