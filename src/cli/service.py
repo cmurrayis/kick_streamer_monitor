@@ -13,6 +13,13 @@ import signal
 import sys
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
+from pathlib import Path
+
+try:
+    from dotenv import load_dotenv
+    DOTENV_AVAILABLE = True
+except ImportError:
+    DOTENV_AVAILABLE = False
 
 from models import ConfigurationDefaults, EnvironmentConfigLoader
 from services import (
@@ -56,10 +63,26 @@ class ServiceCommands:
             dashboard_port = getattr(args, 'dashboard_port', 8080)
             admin_username = getattr(args, 'admin_username', 'admin')
             admin_password = getattr(args, 'admin_password', 'password')
-            log_level = getattr(args, 'log_level', 'INFO')
+            # Load .env file if available for service configuration
+            if DOTENV_AVAILABLE:
+                env_file = Path('.env')
+                if not env_file.exists():
+                    env_file = Path('../.env')
+                if env_file.exists():
+                    load_dotenv(env_file)
+
+            # Determine log level - priority: CLI args > ENV var > default
+            cli_log_level = getattr(args, 'log_level', None)
+            if cli_log_level:
+                log_level = cli_log_level
+            else:
+                # Check environment variable for LOG_LEVEL
+                env_log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
+                log_level = env_log_level
+
             browser_fallback = getattr(args, 'browser_fallback', True)
             simple_mode = getattr(args, 'simple_mode', False)
-            
+
             # Determine monitoring mode
             if dry_run:
                 mode = MonitoringMode.DRY_RUN
@@ -67,16 +90,17 @@ class ServiceCommands:
                 mode = MonitoringMode.MANUAL
             else:
                 mode = MonitoringMode.AUTOMATIC
-            
+
             # Validate conflicting options
             if daemon and manual:
                 print("Error: Cannot run in both daemon and manual mode")
                 return 6
-            
+
             monitor_type = "simple polling" if simple_mode else "full WebSocket"
             print(f"Starting Kick Streamer Monitor in {mode.value} mode ({monitor_type})...")
-            
-            # Setup logging for the service  
+            print(f"Using log level: {log_level}")
+
+            # Setup logging for the service
             from lib.logging import setup_logging
             setup_logging(level=log_level.upper())
             self.logger = get_logger(__name__)
