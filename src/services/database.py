@@ -405,26 +405,60 @@ class DatabaseService:
             return False
 
     async def _fetch_kick_channel_data(self, username: str) -> dict:
-        """Fetch channel data from Kick API."""
+        """Fetch channel data from Kick API using both direct and browser fallback methods."""
         import aiohttp
-        try:
-            async with aiohttp.ClientSession() as session:
-                url = f"https://kick.com/api/v1/channels/{username}"
-                logger.info(f"Fetching channel data from: {url}")
 
-                async with session.get(url) as response:
+        # First try direct HTTP request
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'application/json, text/plain, */*',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'DNT': '1',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+            }
+
+            async with aiohttp.ClientSession(headers=headers) as session:
+                url = f"https://kick.com/api/v1/channels/{username}"
+                logger.info(f"Trying direct request to: {url}")
+
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
                     if response.status == 200:
                         data = await response.json()
-                        logger.info(f"Successfully fetched channel data for {username}: ID={data.get('id')}")
+                        logger.info(f"Direct request successful for {username}: ID={data.get('id')}")
                         return data
                     elif response.status == 404:
                         logger.error(f"Channel {username} not found on Kick.com")
                         return None
+                    elif response.status == 403:
+                        logger.warning(f"Direct request blocked (403), trying browser fallback for {username}")
                     else:
-                        logger.error(f"Failed to fetch channel data for {username}: HTTP {response.status}")
-                        return None
+                        logger.warning(f"Direct request failed for {username}: HTTP {response.status}, trying browser fallback")
+
         except Exception as e:
-            logger.error(f"Error fetching channel data for {username}: {e}")
+            logger.warning(f"Direct request error for {username}: {e}, trying browser fallback")
+
+        # If direct request fails, try browser fallback
+        try:
+            from .browser_client import BrowserAPIClient
+            logger.info(f"Using browser fallback for {username}")
+
+            async with BrowserAPIClient(headless=True) as browser_client:
+                data = await browser_client.fetch_channel_data(username)
+                if data:
+                    logger.info(f"Browser fallback successful for {username}: ID={data.get('id')}")
+                    return data
+                else:
+                    logger.error(f"Browser fallback failed for {username}")
+                    return None
+
+        except ImportError:
+            logger.error(f"Browser client not available for {username}")
+            return None
+        except Exception as e:
+            logger.error(f"Browser fallback error for {username}: {e}")
             return None
     
     async def update_streamer_profile_data(self, streamer_id: int, profile_data: dict) -> Optional[Streamer]:
