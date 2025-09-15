@@ -2974,10 +2974,10 @@ class WebDashboardService:
                 }});
 
                 // Build matrix HTML
-                let matrixHTML = '<div class="assignment-grid">';
-                
+                let matrixHTML = `<div class="assignment-grid" style="grid-template-columns: 150px repeat(${{streamers.length}}, minmax(80px, 1fr));">`;
+
                 // Header row
-                matrixHTML += '<div class="matrix-header">User \\\\\\\\ Streamer</div>';
+                matrixHTML += '<div class="matrix-header">User \\\\ Streamer</div>';
                 streamers.forEach(streamer => {{
                     matrixHTML += `<div class="matrix-header">${{streamer.username}}</div>`;
                 }});
@@ -3048,21 +3048,30 @@ class WebDashboardService:
                 if (response.ok) {{
                     const summary = await response.json();
                     console.log('Assignment summary loaded:', summary);
-                    
+
+                    // Create a map of user_id to summary for quick lookup
+                    const summaryMap = new Map();
                     summary.forEach(userSummary => {{
-                        const cell = document.getElementById(`assignments-${{userSummary.user_id}}`);
-                        console.log(`Looking for cell: assignments-${{userSummary.user_id}}, found:`, cell);
-                        if (cell) {{
+                        summaryMap.set(userSummary.user_id, userSummary);
+                    }});
+
+                    // Update all assignment cells
+                    document.querySelectorAll('.assignments-cell').forEach(cell => {{
+                        const userId = parseInt(cell.id.replace('assignments-', ''));
+                        const userSummary = summaryMap.get(userId);
+
+                        if (userSummary) {{
                             if (userSummary.streamers.length === 0) {{
                                 cell.innerHTML = '<span style="color: #888;">None</span>';
                             }} else {{
-                                const tags = userSummary.streamers.map(s => 
+                                const tags = userSummary.streamers.map(s =>
                                     `<span class="assignment-tag">${{s}}</span>`
                                 ).join('');
                                 cell.innerHTML = tags;
                             }}
                         }} else {{
-                            console.warn(`Cell not found for user ${{userSummary.user_id}}`);
+                            // User not in summary means no assignments
+                            cell.innerHTML = '<span style="color: #888;">None</span>';
                         }}
                     }});
                 }} else {{
