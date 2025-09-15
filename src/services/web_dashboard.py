@@ -88,6 +88,7 @@ class WebDashboardService:
             self.app.router.add_get('/admin/users', self._handle_admin_users)
             self.app.router.add_post('/admin/users/add', self._handle_add_user)
             self.app.router.add_post('/admin/users/delete', self._handle_delete_user)
+            self.app.router.add_post('/admin/users/toggle-status', self._handle_toggle_user_status)
             self.app.router.add_post('/admin/users/assign', self._handle_assign_streamer)
             self.app.router.add_post('/admin/users/unassign', self._handle_unassign_streamer)
             
@@ -415,14 +416,21 @@ class WebDashboardService:
         user_session = self._require_admin(request)
         if not user_session:
             return Response(status=401, text="Unauthorized")
-        
+
         try:
             data = await request.post()
             username = data.get('username', '').strip()
-            
+
             if not username:
                 return Response(status=400, text="Username required")
-            
+
+            # Check if database service is available
+            if not self.database_service:
+                logger.error("Database service not available")
+                response = Response(status=302)
+                response.headers['Location'] = '/admin/streamers?error=database_unavailable'
+                return response
+
             # Add streamer via database service
             success = await self.database_service.add_streamer(username)
             
@@ -859,7 +867,73 @@ class WebDashboardService:
             response = Response(status=302)
             response.headers['Location'] = '/admin/users?error=delete_failed'
             return response
-    
+
+    async def _handle_toggle_user_status(self, request: Request) -> Response:
+        """Handle toggling user status (active/inactive)."""
+        redirect = self._require_admin_redirect(request)
+        if redirect:
+            return redirect
+
+        user_session = self._require_admin(request)
+
+        try:
+            data = await request.post()
+            user_id = int(data.get('user_id', 0))
+
+            if not user_id:
+                response = Response(status=302)
+                response.headers['Location'] = '/admin/users?error=missing_user_id'
+                return response
+
+            # Check if database service is available
+            if not self.database_service:
+                logger.error("Database service not available")
+                response = Response(status=302)
+                response.headers['Location'] = '/admin/users?error=database_unavailable'
+                return response
+
+            # Get user info before status change
+            user_to_update = await self.database_service.get_user_by_id(user_id)
+            if not user_to_update:
+                response = Response(status=302)
+                response.headers['Location'] = '/admin/users?error=user_not_found'
+                return response
+
+            # Prevent status change of admin users
+            if user_to_update.role == UserRole.ADMIN:
+                response = Response(status=302)
+                response.headers['Location'] = '/admin/users?error=cannot_modify_admin'
+                return response
+
+            # Toggle status between ACTIVE and INACTIVE
+            new_status = UserStatus.INACTIVE if user_to_update.status == UserStatus.ACTIVE else UserStatus.ACTIVE
+
+            # Update user status
+            from models.user import UserUpdate
+            update_data = UserUpdate(status=new_status)
+            updated_user = await self.database_service.update_user(user_id, update_data)
+
+            if updated_user:
+                status_action = "disabled" if new_status == UserStatus.INACTIVE else "enabled"
+                logger.info(f"Admin {user_session.username} {status_action} user: {user_to_update.username}")
+                response = Response(status=302)
+                response.headers['Location'] = f'/admin/users?success={status_action}'
+                return response
+            else:
+                response = Response(status=302)
+                response.headers['Location'] = '/admin/users?error=status_update_failed'
+                return response
+
+        except ValueError:
+            response = Response(status=302)
+            response.headers['Location'] = '/admin/users?error=invalid_user_id'
+            return response
+        except Exception as e:
+            logger.error(f"Toggle user status error: {e}")
+            response = Response(status=302)
+            response.headers['Location'] = '/admin/users?error=status_update_failed'
+            return response
+
     async def _handle_assign_streamer(self, request: Request) -> Response:
         """Handle assigning a streamer to a user."""
         user_session = self._require_admin(request)
@@ -960,7 +1034,12 @@ class WebDashboardService:
         user_session = self._require_admin(request)
         if not user_session:
             return Response(status=401, text="Unauthorized")
-        
+
+        # Check if database service is available
+        if not self.database_service:
+            logger.error("Database service not available for users API")
+            return Response(status=500, text="Database service unavailable")
+
         try:
             users = await self.database_service.get_all_users()
             users_data = []
@@ -981,7 +1060,12 @@ class WebDashboardService:
         user_session = self._require_admin(request)
         if not user_session:
             return Response(status=401, text="Unauthorized")
-        
+
+        # Check if database service is available
+        if not self.database_service:
+            logger.error("Database service not available for streamers API")
+            return Response(status=500, text="Database service unavailable")
+
         try:
             streamers = await self.database_service.get_all_streamers()
             streamers_data = []
@@ -1005,7 +1089,12 @@ class WebDashboardService:
         user_session = self._require_admin(request)
         if not user_session:
             return Response(status=401, text="Unauthorized")
-        
+
+        # Check if database service is available
+        if not self.database_service:
+            logger.error("Database service not available for assignments API")
+            return Response(status=500, text="Database service unavailable")
+
         try:
             assignments = await self.database_service.get_all_user_streamer_assignments()
             assignments_data = []
@@ -1025,7 +1114,12 @@ class WebDashboardService:
         user_session = self._require_admin(request)
         if not user_session:
             return Response(status=401, text="Unauthorized")
-        
+
+        # Check if database service is available
+        if not self.database_service:
+            logger.error("Database service not available for user assignments")
+            return Response(status=500, text="Database service unavailable")
+
         try:
             user_id = int(request.match_info['user_id'])
             assignments = await self.database_service.get_user_streamer_assignments(user_id)
@@ -1049,7 +1143,12 @@ class WebDashboardService:
         user_session = self._require_admin(request)
         if not user_session:
             return Response(status=401, text="Unauthorized")
-        
+
+        # Check if database service is available
+        if not self.database_service:
+            logger.error("Database service not available for assignments summary")
+            return Response(status=500, text="Database service unavailable")
+
         try:
             logger.info("Starting assignments summary API call")
             users = await self.database_service.get_all_users()
@@ -2283,18 +2382,31 @@ class WebDashboardService:
             logger.info(f"Found {len(users)} users for admin users page")
             
         for user in users:
-            # Don't show delete button for admin users
-            delete_button = ""
+            # Don't show delete/toggle buttons for admin users
+            action_buttons = ""
             if user.role != UserRole.ADMIN:
+                # Toggle status button
+                status_action = "DISABLE" if user.status == UserStatus.ACTIVE else "ENABLE"
+                status_btn_class = "remove-btn" if user.status == UserStatus.ACTIVE else "add-btn"
+                toggle_button = f'''
+                    <form method="post" action="/admin/users/toggle-status" style="display: inline;"
+                          onsubmit="return confirm('Are you sure you want to {status_action.lower()} user {user.username}?')">
+                        <input type="hidden" name="user_id" value="{user.id}">
+                        <button type="submit" class="{status_btn_class}" style="padding: 5px 10px; font-size: 12px; margin-right: 5px;">{status_action}</button>
+                    </form>
+                '''
+
+                # Delete button
                 delete_button = f'''
-                    <form method="post" action="/admin/users/delete" style="display: inline;" 
+                    <form method="post" action="/admin/users/delete" style="display: inline;"
                           onsubmit="return confirm('Are you sure you want to delete user {user.username}? This action cannot be undone.')">
                         <input type="hidden" name="user_id" value="{user.id}">
                         <button type="submit" class="remove-btn" style="padding: 5px 10px; font-size: 12px;">DELETE</button>
                     </form>
                 '''
+                action_buttons = toggle_button + delete_button
             else:
-                delete_button = '<span style="color: #666;">Protected</span>'
+                action_buttons = '<span style="color: #666;">Protected</span>'
             
             user_rows += f'''
                 <tr>
@@ -2306,7 +2418,7 @@ class WebDashboardService:
                     <td class="status-{user.status}">{user.status.upper()}</td>
                     <td class="assignments-cell" id="assignments-{user.id}">Loading...</td>
                     <td>{user.created_at.strftime("%Y-%m-%d %H:%M") if user.created_at else "-"}</td>
-                    <td>{delete_button}</td>
+                    <td>{action_buttons}</td>
                 </tr>
             '''
         

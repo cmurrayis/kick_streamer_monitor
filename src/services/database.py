@@ -1017,13 +1017,14 @@ class DatabaseService:
     async def get_all_user_streamer_assignments(self) -> List[UserStreamerAssignment]:
         """Get all user-streamer assignments."""
         try:
-            query = """
-            SELECT id, user_id, streamer_id, assigned_at, assigned_by
-            FROM user_streamer_assignments
-            ORDER BY assigned_at DESC
-            """
-            records = await self.pool.fetch(query)
-            return [self._record_to_user_streamer_assignment(record) for record in records]
+            async with self.get_connection() as conn:
+                query = """
+                SELECT id, user_id, streamer_id, assigned_at, assigned_by
+                FROM user_streamer_assignments
+                ORDER BY assigned_at DESC
+                """
+                records = await conn.fetch(query)
+                return [UserStreamerAssignment(**dict(record)) for record in records]
         except Exception as e:
             logger.error(f"Error getting all user streamer assignments: {e}")
             return []
