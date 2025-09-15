@@ -249,6 +249,18 @@ class DatabaseService:
             record = await conn.fetchrow(query, streamer_id)
             return Streamer(**dict(record)) if record else None
     
+    async def get_streamer_by_id(self, streamer_id: int) -> Optional[Streamer]:
+        """Get streamer by ID."""
+        async with self.get_connection() as conn:
+            query = """
+            SELECT id, kick_user_id, username, display_name, status, 
+                   last_seen_online, last_status_update, created_at, updated_at, is_active
+            FROM streamer WHERE id = $1
+            """
+            
+            record = await conn.fetchrow(query, streamer_id)
+            return Streamer(**dict(record)) if record else None
+    
     async def get_streamer_by_username(self, username: str) -> Optional[Streamer]:
         """Get streamer by username."""
         async with self.get_connection() as conn:
@@ -362,6 +374,29 @@ class DatabaseService:
         except Exception as e:
             logger.error(f"Error getting streamer count: {e}")
             return 0
+    
+    async def add_streamer(self, username: str) -> bool:
+        """Add a new streamer by username."""
+        try:
+            # Check if streamer already exists
+            existing = await self.get_streamer_by_username(username)
+            if existing:
+                logger.warning(f"Streamer {username} already exists")
+                return False
+            
+            # Create new streamer record
+            streamer_create = StreamerCreate(
+                kick_user_id=f"user_{username}",  # Placeholder until we get real ID from API
+                username=username,
+                display_name=username,
+                status=StreamerStatus.UNKNOWN
+            )
+            
+            result = await self.create_streamer(streamer_create)
+            return result is not None
+        except Exception as e:
+            logger.error(f"Error adding streamer {username}: {e}")
+            return False
     
     async def update_streamer_profile_data(self, streamer_id: int, profile_data: dict) -> Optional[Streamer]:
         """Update streamer profile data (bio, profile picture, etc.)."""

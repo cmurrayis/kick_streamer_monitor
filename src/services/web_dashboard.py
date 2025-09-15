@@ -43,6 +43,9 @@ class WebDashboardService:
         self._is_running = False
         
         # WebSocket connections for real-time updates
+        
+        # Rate limiting for registration attempts
+        self.registration_attempts = {}  # Track registration attempts by IP
         self._websocket_connections = set()
     
     async def start(self) -> None:
@@ -84,6 +87,7 @@ class WebDashboardService:
             self.app.router.add_post('/admin/streamers/refresh', self._handle_refresh_streamer_data)
             self.app.router.add_get('/admin/users', self._handle_admin_users)
             self.app.router.add_post('/admin/users/add', self._handle_add_user)
+            self.app.router.add_post('/admin/users/delete', self._handle_delete_user)
             self.app.router.add_post('/admin/users/assign', self._handle_assign_streamer)
             self.app.router.add_post('/admin/users/unassign', self._handle_unassign_streamer)
             
@@ -225,7 +229,8 @@ class WebDashboardService:
     
     async def _handle_login_page(self, request: Request) -> Response:
         """Serve the login page."""
-        html_content = self._get_login_html()
+        error = request.query.get('error')
+        html_content = self._get_login_html(error)
         return Response(text=html_content, content_type='text/html')
     
     async def _handle_login_submit(self, request: Request) -> Response:
@@ -295,20 +300,68 @@ class WebDashboardService:
             logger.error(f"Auth check error: {e}")
             return None
     
+    def _require_admin_redirect(self, request: Request) -> Response:
+        """Check admin auth and return redirect response if unauthorized."""
+        user_session = self._require_admin(request)
+        if not user_session:
+            response = Response(status=302)
+            response.headers['Location'] = '/login?error=session_expired'
+            return response
+        return None
+    
     async def _handle_register_page(self, request: Request) -> Response:
         """Serve the registration page."""
         html_content = self._get_register_page_html()
         return Response(text=html_content, content_type='text/html')
     
+    def _check_registration_rate_limit(self, remote_ip: str) -> bool:
+        """Check if registration rate limit is exceeded for IP."""
+        import time
+        current_time = time.time()
+        
+        # Clean old entries (older than 1 hour)
+        cutoff_time = current_time - 3600
+        self.registration_attempts = {
+            ip: attempts for ip, attempts in self.registration_attempts.items()
+            if any(timestamp > cutoff_time for timestamp in attempts)
+        }
+        
+        # Get attempts for this IP in the last hour
+        attempts = self.registration_attempts.get(remote_ip, [])
+        recent_attempts = [t for t in attempts if t > cutoff_time]
+        
+        # Allow max 3 registration attempts per hour per IP
+        if len(recent_attempts) >= 3:
+            return True  # Rate limited
+        
+        # Record this attempt
+        if remote_ip not in self.registration_attempts:
+            self.registration_attempts[remote_ip] = []
+        self.registration_attempts[remote_ip].append(current_time)
+        
+        return False  # Not rate limited
+    
     async def _handle_register_submit(self, request: Request) -> Response:
         """Handle user registration submission."""
         try:
+            # Rate limiting by IP
+            remote_ip = request.remote or 'unknown'
+            if self._check_registration_rate_limit(remote_ip):
+                logger.warning(f"Registration blocked - rate limit exceeded from {remote_ip}")
+                return Response(status=302, headers={'Location': '/register?error=rate_limited'})
+            
             data = await request.post()
             username = data.get('username', '').strip()
             email = data.get('email', '').strip()
             password = data.get('password', '').strip()
             confirm_password = data.get('confirm_password', '').strip()
             display_name = data.get('display_name', '').strip()
+            website = data.get('website', '').strip()  # Honeypot field
+            
+            # Bot protection: if honeypot field is filled, it's likely a bot
+            if website:
+                logger.warning(f"Registration blocked - honeypot triggered from {remote_ip}")
+                return Response(status=302, headers={'Location': '/register?error=registration_failed'})
             
             # Validate inputs
             if not username or not email or not password:
@@ -338,13 +391,11 @@ class WebDashboardService:
     
     async def _handle_admin_dashboard(self, request: Request) -> Response:
         """Serve the admin dashboard."""
-        user_session = self._require_admin(request)
-        if not user_session:
-            # Redirect to login
-            response = Response(status=302)
-            response.headers['Location'] = '/login'
-            return response
+        redirect = self._require_admin_redirect(request)
+        if redirect:
+            return redirect
         
+        user_session = self._require_admin(request)
         html_content = self._get_admin_dashboard_html(user_session)
         return Response(text=html_content, content_type='text/html')
     
@@ -573,8 +624,14 @@ class WebDashboardService:
                 await asyncio.sleep(5)
     
     
-    def _get_login_html(self, error_message: str = "") -> str:
+    def _get_login_html(self, error_code: str = "") -> str:
         """Generate the login page HTML."""
+        error_messages = {
+            'session_expired': 'Your session has expired. Please log in again.',
+            'invalid_credentials': 'Invalid username or password.',
+            'login_failed': 'Login failed. Please try again.'
+        }
+        error_message = error_messages.get(error_code, error_code) if error_code else ''
         error_html = f'<div class="error-message">{error_message}</div>' if error_message else ''
         
         return f'''<!DOCTYPE html>
@@ -750,6 +807,59 @@ class WebDashboardService:
             response.headers['Location'] = '/admin/users?error=add_failed'
             return response
     
+    async def _handle_delete_user(self, request: Request) -> Response:
+        """Handle deleting a user."""
+        redirect = self._require_admin_redirect(request)
+        if redirect:
+            return redirect
+        
+        user_session = self._require_admin(request)
+        
+        try:
+            data = await request.post()
+            user_id = int(data.get('user_id', 0))
+            
+            if not user_id:
+                response = Response(status=302)
+                response.headers['Location'] = '/admin/users?error=missing_user_id'
+                return response
+            
+            # Get user info before deletion
+            user_to_delete = await self.database_service.get_user_by_id(user_id)
+            if not user_to_delete:
+                response = Response(status=302)
+                response.headers['Location'] = '/admin/users?error=user_not_found'
+                return response
+            
+            # Prevent deletion of admin users
+            if user_to_delete.role == UserRole.ADMIN:
+                response = Response(status=302)
+                response.headers['Location'] = '/admin/users?error=cannot_delete_admin'
+                return response
+            
+            # Delete user (this should cascade delete assignments)
+            success = await self.database_service.delete_user(user_id)
+            
+            if success:
+                logger.info(f"Admin {user_session.username} deleted user: {user_to_delete.username}")
+                response = Response(status=302)
+                response.headers['Location'] = '/admin/users?success=deleted'
+                return response
+            else:
+                response = Response(status=302)
+                response.headers['Location'] = '/admin/users?error=delete_failed'
+                return response
+                
+        except ValueError:
+            response = Response(status=302)
+            response.headers['Location'] = '/admin/users?error=invalid_user_id'
+            return response
+        except Exception as e:
+            logger.error(f"Delete user error: {e}")
+            response = Response(status=302)
+            response.headers['Location'] = '/admin/users?error=delete_failed'
+            return response
+    
     async def _handle_assign_streamer(self, request: Request) -> Response:
         """Handle assigning a streamer to a user."""
         user_session = self._require_admin(request)
@@ -825,7 +935,7 @@ class WebDashboardService:
                 return response
             
             # Remove assignment
-            success = await self.database_service.remove_user_streamer_assignment(
+            success = await self.database_service.delete_user_streamer_assignment(
                 user_id, streamer_id
             )
             
@@ -949,7 +1059,7 @@ class WebDashboardService:
             
             for user in users:
                 try:
-                    if user.role.value != 'admin':  # Skip admin users
+                    if user.role != UserRole.ADMIN:  # Skip admin users
                         logger.info(f"Getting assignments for user {user.id} ({user.username})")
                         try:
                             assignments = await self.database_service.get_user_streamer_assignments(user.id)
@@ -1156,6 +1266,12 @@ class WebDashboardService:
                 <input type="password" id="confirm_password" name="confirm_password" required>
             </div>
             
+            <!-- Honeypot field - hidden from real users -->
+            <div style="position: absolute; left: -9999px; visibility: hidden;">
+                <label for="website">Website (leave blank):</label>
+                <input type="text" id="website" name="website" tabindex="-1" autocomplete="off">
+            </div>
+            
             <button type="submit" class="register-btn">REGISTER</button>
         </form>
         
@@ -1176,7 +1292,8 @@ class WebDashboardService:
             const messages = {
                 'missing_fields': 'Please fill in all required fields.',
                 'password_mismatch': 'Passwords do not match.',
-                'registration_failed': 'Registration failed. Please try again.'
+                'registration_failed': 'Registration failed. Please try again.',
+                'rate_limited': 'Too many registration attempts. Please try again later.'
             };
             messageContainer.innerHTML = `<div class="error-message">${messages[error] || 'Registration failed!'}</div>`;
         } else if (message) {
@@ -2080,7 +2197,6 @@ class WebDashboardService:
             const messages = {
                 'added': 'Streamer added successfully!',
                 'removed': 'Streamer removed successfully!',
-                'toggled': 'Streamer status toggled successfully!',
                 'refreshed': 'Streamer profile data refreshed successfully!'
             };
             messageContainer.innerHTML = `<div class="success-message">${messages[success] || 'Operation successful!'}</div>`;
@@ -2088,7 +2204,6 @@ class WebDashboardService:
             const messages = {
                 'add_failed': 'Failed to add streamer. Please try again.',
                 'remove_failed': 'Failed to remove streamer. Please try again.',
-                'toggle_failed': 'Failed to toggle streamer status. Please try again.',
                 'refresh_failed': 'Failed to refresh streamer data. Please try again.',
                 'api_failed': 'API error: Could not fetch data from Kick.com.',
                 'no_data': 'No profile data found for this streamer.',
@@ -2130,10 +2245,6 @@ class WebDashboardService:
                                     <input type="hidden" name="streamer_id" value="${streamer.id}">
                                     <button type="submit" class="action-btn" title="Refresh profile data from Kick.com">REFRESH</button>
                                 </form>
-                                <form method="post" action="/admin/streamers/toggle" style="display: inline;">
-                                    <input type="hidden" name="streamer_id" value="${streamer.id}">
-                                    <button type="submit" class="action-btn">TOGGLE</button>
-                                </form>
                                 <form method="post" action="/admin/streamers/remove" style="display: inline;" 
                                       onsubmit="return confirm('Are you sure you want to remove ${streamer.username}?')">
                                     <input type="hidden" name="streamer_id" value="${streamer.id}">
@@ -2172,6 +2283,19 @@ class WebDashboardService:
             logger.info(f"Found {len(users)} users for admin users page")
             
         for user in users:
+            # Don't show delete button for admin users
+            delete_button = ""
+            if user.role != UserRole.ADMIN:
+                delete_button = f'''
+                    <form method="post" action="/admin/users/delete" style="display: inline;" 
+                          onsubmit="return confirm('Are you sure you want to delete user {user.username}? This action cannot be undone.')">
+                        <input type="hidden" name="user_id" value="{user.id}">
+                        <button type="submit" class="remove-btn" style="padding: 5px 10px; font-size: 12px;">DELETE</button>
+                    </form>
+                '''
+            else:
+                delete_button = '<span style="color: #666;">Protected</span>'
+            
             user_rows += f'''
                 <tr>
                     <td>{user.id}</td>
@@ -2182,13 +2306,14 @@ class WebDashboardService:
                     <td class="status-{user.status}">{user.status.upper()}</td>
                     <td class="assignments-cell" id="assignments-{user.id}">Loading...</td>
                     <td>{user.created_at.strftime("%Y-%m-%d %H:%M") if user.created_at else "-"}</td>
+                    <td>{delete_button}</td>
                 </tr>
             '''
         
         # Generate user options for assignment dropdown
         user_options = ""
         for user in users:
-            if user.role != 'admin':
+            if user.role != UserRole.ADMIN:
                 user_options += f'<option value="{user.id}">{user.username} ({user.role})</option>'
         
         # Generate streamer options for assignment dropdown
@@ -2544,7 +2669,8 @@ class WebDashboardService:
             const messages = {{
                 'added': 'User created successfully!',
                 'assigned': 'Streamer assigned successfully!',
-                'unassigned': 'Streamer unassigned successfully!'
+                'unassigned': 'Streamer unassigned successfully!',
+                'deleted': 'User deleted successfully!'
             }};
             messageContainer.innerHTML = `<div class="success-message">${{messages[success] || 'Operation successful!'}}</div>`;
         }} else if (error) {{
@@ -2554,7 +2680,11 @@ class WebDashboardService:
                 'unassign_failed': 'Failed to unassign streamer. Please try again.',
                 'missing_fields': 'Please fill in all required fields.',
                 'streamer_already_assigned': 'This streamer is already assigned to another user.',
-                'duplicate_assignment': 'This streamer is already assigned to this user.'
+                'duplicate_assignment': 'This streamer is already assigned to this user.',
+                'missing_user_id': 'Invalid user ID provided.',
+                'user_not_found': 'User not found.',
+                'cannot_delete_admin': 'Cannot delete admin users.',
+                'delete_failed': 'Failed to delete user. Please try again.'
             }};
             messageContainer.innerHTML = `<div class="error-message">${{messages[error] || 'Operation failed!'}}</div>`;
         }}
