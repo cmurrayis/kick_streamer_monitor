@@ -187,15 +187,19 @@ class SimpleMonitorService:
                 if viewer_count is not None:
                     logger.debug(f'{streamer.username} has {viewer_count} viewers')
 
-            # Update database if status changed or if we have viewer data to update
-            should_update = (new_status != streamer.status.value) or (viewer_count is not None)
+            # Handle status changes and viewer data updates separately
+            status_changed = new_status != streamer.status.value
 
-            if should_update:
+            if status_changed:
+                # Status actually changed - use full status update
                 await self._update_streamer_status(streamer, new_status, viewer_count, livestream_id)
+            elif viewer_count is not None:
+                # Status same but we have viewer data to update
+                await self._update_viewer_data_only(streamer, viewer_count, livestream_id)
 
-                # Update playback URL if live (like your JS)
-                if is_live and livestream.get('playback_url'):
-                    await self._update_playback_url(streamer, livestream['playback_url'])
+            # Update playback URL if live (like your JS)
+            if is_live and livestream.get('playback_url'):
+                await self._update_playback_url(streamer, livestream['playback_url'])
             
             return new_status
             
@@ -258,6 +262,19 @@ class SimpleMonitorService:
         except Exception as e:
             logger.error(f"Error updating {streamer.username} status: {e}")
     
+    async def _update_viewer_data_only(self, streamer: Streamer, viewer_count: int, livestream_id: Optional[int] = None):
+        """Update only viewer data without changing status."""
+        try:
+            # Update viewer statistics in database
+            if viewer_count is not None:
+                await self.database_service.update_streamer_viewer_stats(
+                    streamer.id, viewer_count, livestream_id
+                )
+                logger.debug(f"Updated viewer count for {streamer.username}: {viewer_count}")
+
+        except Exception as e:
+            logger.error(f"Error updating viewer data for {streamer.username}: {e}")
+
     async def _update_playback_url(self, streamer: Streamer, playback_url: str):
         """Update playback URL for live streamer."""
         try:

@@ -86,6 +86,7 @@ class WebDashboardService:
             self.app.router.add_post('/admin/streamers/toggle', self._handle_toggle_streamer)
             self.app.router.add_post('/admin/streamers/refresh', self._handle_refresh_streamer_data)
             self.app.router.add_get('/admin/users', self._handle_admin_users)
+            self.app.router.add_get('/admin/analytics', self._handle_admin_analytics)
             self.app.router.add_post('/admin/users/add', self._handle_add_user)
             self.app.router.add_post('/admin/users/delete', self._handle_delete_user)
             self.app.router.add_post('/admin/users/toggle-status', self._handle_toggle_user_status)
@@ -783,7 +784,18 @@ class WebDashboardService:
         
         html_content = await self._get_admin_users_html(user_session)
         return Response(text=html_content, content_type='text/html')
-    
+
+    async def _handle_admin_analytics(self, request: Request) -> Response:
+        """Serve the admin analytics page."""
+        user_session = self._require_admin(request)
+        if not user_session:
+            response = Response(status=302)
+            response.headers['Location'] = '/login'
+            return response
+
+        html_content = await self._get_admin_analytics_html(user_session)
+        return Response(text=html_content, content_type='text/html')
+
     async def _handle_add_user(self, request: Request) -> Response:
         """Handle adding a new user."""
         user_session = self._require_admin(request)
@@ -2306,10 +2318,10 @@ class WebDashboardService:
                 <div class="menu-title">📊 VIEW DASHBOARD</div>
                 <div class="menu-desc">Public monitoring dashboard</div>
             </a>
-            <div class="menu-card" style="opacity: 0.5;">
+            <a href="/admin/analytics" class="menu-card">
                 <div class="menu-title">📈 ANALYTICS</div>
-                <div class="menu-desc">Coming soon...</div>
-            </div>
+                <div class="menu-desc">View comprehensive analytics and statistics</div>
+            </a>
             <div class="menu-card" style="opacity: 0.5;">
                 <div class="menu-title">⚙️ SETTINGS</div>
                 <div class="menu-desc">Coming soon...</div>
@@ -3349,6 +3361,322 @@ class WebDashboardService:
             indicator.className = `status-indicator ${status}`;
             text.textContent = status === 'healthy' ? 'System Operational' : 'Connection Issues';
         }
+    </script>
+</body>
+</html>'''
+
+    async def _get_admin_analytics_html(self, user_session) -> str:
+        """Generate the admin analytics page HTML."""
+        return '''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics - Admin Panel</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #00ff00;
+            margin: 0;
+            padding: 20px;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid #00ff00;
+            padding: 20px;
+            margin-bottom: 20px;
+            background: #0a0a0a;
+        }
+        .header h1 { margin: 0; }
+        .nav-links {
+            display: flex;
+            gap: 15px;
+        }
+        .nav-link {
+            color: #00ccff;
+            text-decoration: none;
+            padding: 8px 15px;
+            border: 1px solid #00ccff;
+            background: #0a0a0a;
+        }
+        .nav-link:hover {
+            background: #00ccff;
+            color: #000000;
+        }
+        .analytics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .analytics-card {
+            border: 1px solid #00ff00;
+            padding: 20px;
+            background: #0a0a0a;
+        }
+        .card-title {
+            color: #ffff00;
+            margin-bottom: 15px;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            padding: 5px 0;
+            border-bottom: 1px solid #333;
+        }
+        .stat-label {
+            color: #888;
+        }
+        .stat-value {
+            color: #00ff00;
+            font-weight: bold;
+        }
+        .chart-container {
+            height: 200px;
+            border: 1px solid #333;
+            background: #111;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+            margin-top: 10px;
+        }
+        .viewer-trends {
+            grid-column: 1 / -1;
+        }
+        .loading {
+            text-align: center;
+            color: #888;
+            padding: 20px;
+        }
+        .error {
+            color: #ff6666;
+            text-align: center;
+            padding: 20px;
+        }
+        .refresh-info {
+            text-align: center;
+            margin-top: 20px;
+            color: #888;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 ANALYTICS DASHBOARD</h1>
+            <div class="nav-links">
+                <a href="/admin" class="nav-link">MAIN</a>
+                <a href="/admin/streamers" class="nav-link">STREAMERS</a>
+                <a href="/admin/users" class="nav-link">USERS</a>
+            </div>
+        </div>
+
+        <div class="analytics-grid" id="analytics-content">
+            <div class="analytics-card">
+                <div class="card-title">👥 VIEWER STATISTICS</div>
+                <div id="viewer-stats" class="loading">Loading viewer data...</div>
+            </div>
+
+            <div class="analytics-card">
+                <div class="card-title">📈 STREAM ACTIVITY</div>
+                <div id="stream-stats" class="loading">Loading stream data...</div>
+            </div>
+
+            <div class="analytics-card">
+                <div class="card-title">🏆 TOP STREAMERS</div>
+                <div id="top-streamers" class="loading">Loading top streamers...</div>
+            </div>
+
+            <div class="analytics-card">
+                <div class="card-title">⚡ SYSTEM PERFORMANCE</div>
+                <div id="system-stats" class="loading">Loading system data...</div>
+            </div>
+
+            <div class="analytics-card viewer-trends">
+                <div class="card-title">📊 VIEWER TRENDS (24H)</div>
+                <div class="chart-container" id="viewer-chart">
+                    Chart visualization coming soon...
+                </div>
+            </div>
+        </div>
+
+        <div class="refresh-info">
+            Last Updated: <span id="last-update">Loading...</span> |
+            Auto-refresh every 30 seconds
+        </div>
+    </div>
+
+    <script>
+        let refreshInterval;
+
+        async function loadAnalytics() {
+            try {
+                // Load viewer analytics
+                const viewerResponse = await fetch('/api/dashboard/viewer-analytics');
+                const viewerData = await viewerResponse.json();
+                updateViewerStats(viewerData);
+
+                // Load system health
+                const healthResponse = await fetch('/api/dashboard/system-health');
+                const healthData = await healthResponse.json();
+                updateSystemStats(healthData);
+
+                // Load status grid for stream activity
+                const statusResponse = await fetch('/api/dashboard/status-grid');
+                const statusData = await statusResponse.json();
+                updateStreamStats(statusData);
+
+                // Load recent activity for top streamers
+                const activityResponse = await fetch('/api/dashboard/recent-activity?limit=10');
+                const activityData = await activityResponse.json();
+                updateTopStreamers(activityData);
+
+                // Update timestamp
+                document.getElementById('last-update').textContent = new Date().toLocaleString();
+
+            } catch (error) {
+                console.error('Failed to load analytics:', error);
+                showError('Failed to load analytics data');
+            }
+        }
+
+        function updateViewerStats(data) {
+            const container = document.getElementById('viewer-stats');
+            const stats = data.summary || {};
+
+            container.innerHTML = `
+                <div class="stat-row">
+                    <span class="stat-label">Total Viewers Now:</span>
+                    <span class="stat-value">${(stats.total_current_viewers || 0).toLocaleString()}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Peak Today:</span>
+                    <span class="stat-value">${(stats.peak_viewers_today || 0).toLocaleString()}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Average (24h):</span>
+                    <span class="stat-value">${(stats.avg_viewers_24h || 0).toLocaleString()}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Streams with Viewers:</span>
+                    <span class="stat-value">${stats.live_streams_with_viewers || 0}</span>
+                </div>
+            `;
+        }
+
+        function updateStreamStats(data) {
+            const container = document.getElementById('stream-stats');
+            const online = data.filter(s => s.status === 'online').length;
+            const offline = data.filter(s => s.status === 'offline').length;
+            const total = data.length;
+
+            container.innerHTML = `
+                <div class="stat-row">
+                    <span class="stat-label">Total Streamers:</span>
+                    <span class="stat-value">${total}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Currently Live:</span>
+                    <span class="stat-value" style="color: #00ff00;">${online}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Offline:</span>
+                    <span class="stat-value" style="color: #ff6666;">${offline}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Live Rate:</span>
+                    <span class="stat-value">${total > 0 ? ((online/total)*100).toFixed(1) : 0}%</span>
+                </div>
+            `;
+        }
+
+        function updateTopStreamers(data) {
+            const container = document.getElementById('top-streamers');
+
+            if (!data.events || data.events.length === 0) {
+                container.innerHTML = '<div class="stat-row"><span class="stat-label">No recent activity</span></div>';
+                return;
+            }
+
+            // Group by streamer and get latest events
+            const streamerActivity = {};
+            data.events.forEach(event => {
+                if (!streamerActivity[event.streamer_username] ||
+                    new Date(event.event_timestamp) > new Date(streamerActivity[event.streamer_username].event_timestamp)) {
+                    streamerActivity[event.streamer_username] = event;
+                }
+            });
+
+            const recentStreamers = Object.values(streamerActivity)
+                .sort((a, b) => new Date(b.event_timestamp) - new Date(a.event_timestamp))
+                .slice(0, 5);
+
+            container.innerHTML = recentStreamers.map(streamer => `
+                <div class="stat-row">
+                    <span class="stat-label">${streamer.streamer_username}:</span>
+                    <span class="stat-value" style="color: ${streamer.new_status === 'online' ? '#00ff00' : '#ff6666'};">
+                        ${streamer.new_status.toUpperCase()}
+                        ${streamer.viewer_count ? `(${streamer.viewer_count.toLocaleString()})` : ''}
+                    </span>
+                </div>
+            `).join('');
+        }
+
+        function updateSystemStats(data) {
+            const container = document.getElementById('system-stats');
+            const processing = data.processing || {};
+            const connections = data.connections || {};
+
+            container.innerHTML = `
+                <div class="stat-row">
+                    <span class="stat-label">Success Rate:</span>
+                    <span class="stat-value">${(processing.success_rate || 0).toFixed(1)}%</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Total Checks:</span>
+                    <span class="stat-value">${processing.total_checks || 0}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Failed Checks:</span>
+                    <span class="stat-value" style="color: ${(processing.failed_checks || 0) > 0 ? '#ff6666' : '#00ff00'};">
+                        ${processing.failed_checks || 0}
+                    </span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">DB Connected:</span>
+                    <span class="stat-value" style="color: ${connections.database_connected ? '#00ff00' : '#ff6666'};">
+                        ${connections.database_connected ? 'YES' : 'NO'}
+                    </span>
+                </div>
+            `;
+        }
+
+        function showError(message) {
+            document.querySelectorAll('.loading').forEach(el => {
+                el.className = 'error';
+                el.textContent = message;
+            });
+        }
+
+        // Initialize and start auto-refresh
+        loadAnalytics();
+        refreshInterval = setInterval(loadAnalytics, 30000);
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (refreshInterval) clearInterval(refreshInterval);
+        });
     </script>
 </body>
 </html>'''
