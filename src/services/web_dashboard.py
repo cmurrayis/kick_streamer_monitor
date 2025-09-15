@@ -77,7 +77,12 @@ class WebDashboardService:
             self.app.router.add_get('/register', self._handle_register_page)
             self.app.router.add_post('/register', self._handle_register_submit)
             self.app.router.add_post('/logout', self._handle_logout)
-            
+
+            # User account settings routes (protected)
+            self.app.router.add_get('/account', self._handle_account_settings)
+            self.app.router.add_post('/account/update-profile', self._handle_update_profile)
+            self.app.router.add_post('/account/change-password', self._handle_change_password)
+
             # Admin routes (protected)
             self.app.router.add_get('/admin', self._handle_admin_dashboard)
             self.app.router.add_get('/admin/streamers', self._handle_admin_streamers)
@@ -398,7 +403,111 @@ class WebDashboardService:
         except Exception as e:
             logger.error(f"Registration error: {e}")
             return Response(status=302, headers={'Location': '/register?error=registration_failed'})
-    
+
+    async def _handle_account_settings(self, request: Request) -> Response:
+        """Handle account settings page."""
+        # Require user login
+        user_session = self._get_user_session(request)
+        if not user_session:
+            return Response(status=302, headers={'Location': '/login'})
+
+        try:
+            # Get user details from database
+            user = await self.database_service.get_user_by_id(user_session.user_id)
+            if not user:
+                return Response(status=302, headers={'Location': '/login'})
+
+            html_content = await self._get_account_settings_html(user)
+            return Response(text=html_content, content_type='text/html')
+
+        except Exception as e:
+            logger.error(f"Account settings error: {e}")
+            return Response(status=500, text="Internal server error")
+
+    async def _handle_update_profile(self, request: Request) -> Response:
+        """Handle updating user profile (email, display name)."""
+        # Require user login
+        user_session = self._get_user_session(request)
+        if not user_session:
+            return Response(status=302, headers={'Location': '/login'})
+
+        try:
+            data = await request.post()
+            email = data.get('email', '').strip()
+            display_name = data.get('display_name', '').strip()
+
+            if not email:
+                return Response(status=302, headers={'Location': '/account?error=missing_email'})
+
+            # Update user profile
+            from models.user import UserUpdate
+            update_data = UserUpdate(
+                email=email,
+                display_name=display_name if display_name else None
+            )
+
+            updated_user = await self.database_service.update_user(user_session.user_id, update_data)
+            if updated_user:
+                return Response(status=302, headers={'Location': '/account?success=profile_updated'})
+            else:
+                return Response(status=302, headers={'Location': '/account?error=update_failed'})
+
+        except Exception as e:
+            logger.error(f"Profile update error: {e}")
+            return Response(status=302, headers={'Location': '/account?error=update_failed'})
+
+    async def _handle_change_password(self, request: Request) -> Response:
+        """Handle password change."""
+        # Require user login
+        user_session = self._get_user_session(request)
+        if not user_session:
+            return Response(status=302, headers={'Location': '/login'})
+
+        try:
+            data = await request.post()
+            current_password = data.get('current_password', '')
+            new_password = data.get('new_password', '')
+            confirm_password = data.get('confirm_password', '')
+
+            # Validate input
+            if not all([current_password, new_password, confirm_password]):
+                return Response(status=302, headers={'Location': '/account?error=missing_fields'})
+
+            if new_password != confirm_password:
+                return Response(status=302, headers={'Location': '/account?error=password_mismatch'})
+
+            if len(new_password) < 6:
+                return Response(status=302, headers={'Location': '/account?error=password_too_short'})
+
+            # Verify current password
+            user = await self.database_service.get_user_by_id(user_session.user_id)
+            if not user:
+                return Response(status=302, headers={'Location': '/login'})
+
+            # Check current password
+            import hashlib
+            current_hash = hashlib.sha256((current_password + "kick_monitor_salt").encode()).hexdigest()
+            if current_hash != user.password_hash:
+                return Response(status=302, headers={'Location': '/account?error=incorrect_password'})
+
+            # Hash new password
+            new_hash = hashlib.sha256((new_password + "kick_monitor_salt").encode()).hexdigest()
+
+            # Update password
+            from models.user import UserUpdate
+            update_data = UserUpdate(password_hash=new_hash)
+            updated_user = await self.database_service.update_user(user_session.user_id, update_data)
+
+            if updated_user:
+                logger.info(f"User {user.username} changed their password")
+                return Response(status=302, headers={'Location': '/account?success=password_changed'})
+            else:
+                return Response(status=302, headers={'Location': '/account?error=password_change_failed'})
+
+        except Exception as e:
+            logger.error(f"Password change error: {e}")
+            return Response(status=302, headers={'Location': '/account?error=password_change_failed'})
+
     async def _handle_admin_dashboard(self, request: Request) -> Response:
         """Serve the admin dashboard."""
         redirect = self._require_admin_redirect(request)
@@ -2051,9 +2160,12 @@ class WebDashboardService:
                     <span id="connection-status">Connecting...</span>
                 </div>
             </div>
-            <form method="post" action="/logout" style="margin: 0;">
-                <button type="submit" class="logout-btn">LOGOUT</button>
-            </form>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <a href="/account" style="background: #666666; color: white; padding: 8px 16px; border-radius: 4px; text-decoration: none; font-weight: bold; transition: background 0.3s;" onmouseover="this.style.background='#555555'" onmouseout="this.style.background='#666666'">⚙️ ACCOUNT</a>
+                <form method="post" action="/logout" style="margin: 0;">
+                    <button type="submit" class="logout-btn">LOGOUT</button>
+                </form>
+            </div>
         </div>
 
         <div class="stats-row">
@@ -2614,7 +2726,321 @@ class WebDashboardService:
     </script>
 </body>
 </html>'''
-    
+
+    async def _get_account_settings_html(self, user) -> str:
+        """Generate account settings page HTML."""
+        return f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account Settings - Kick Monitor</title>
+    <style>
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+
+        body {{
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            color: #ffffff;
+            min-height: 100vh;
+        }}
+
+        .header {{
+            background: rgba(0, 0, 0, 0.3);
+            padding: 1rem;
+            border-bottom: 2px solid #00ff41;
+            margin-bottom: 2rem;
+        }}
+
+        .header-content {{
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }}
+
+        .logo {{
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #00ff41;
+        }}
+
+        .nav-buttons {{
+            display: flex;
+            gap: 1rem;
+        }}
+
+        .nav-btn {{
+            background: #00ff41;
+            color: #000;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            text-decoration: none;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }}
+
+        .nav-btn:hover {{
+            background: #00cc34;
+            transform: translateY(-2px);
+        }}
+
+        .logout-btn {{
+            background: #ff4444;
+            color: white;
+        }}
+
+        .logout-btn:hover {{
+            background: #cc3333;
+        }}
+
+        .container {{
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }}
+
+        .page-title {{
+            text-align: center;
+            margin-bottom: 2rem;
+            color: #00ff41;
+            font-size: 2rem;
+        }}
+
+        .settings-section {{
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            border: 1px solid rgba(0, 255, 65, 0.3);
+        }}
+
+        .section-title {{
+            font-size: 1.3rem;
+            color: #00ff41;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid rgba(0, 255, 65, 0.3);
+            padding-bottom: 0.5rem;
+        }}
+
+        .form-group {{
+            margin-bottom: 1rem;
+        }}
+
+        label {{
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #cccccc;
+            font-weight: 500;
+        }}
+
+        input[type="text"], input[type="email"], input[type="password"] {{
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #444;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+            font-size: 1rem;
+        }}
+
+        input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focus {{
+            outline: none;
+            border-color: #00ff41;
+            box-shadow: 0 0 5px rgba(0, 255, 65, 0.3);
+        }}
+
+        .readonly {{
+            background: rgba(255, 255, 255, 0.05);
+            cursor: not-allowed;
+        }}
+
+        .form-btn {{
+            background: #00ff41;
+            color: #000;
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }}
+
+        .form-btn:hover {{
+            background: #00cc34;
+            transform: translateY(-2px);
+        }}
+
+        .danger-btn {{
+            background: #ff4444;
+            color: white;
+        }}
+
+        .danger-btn:hover {{
+            background: #cc3333;
+        }}
+
+        .message-container {{
+            margin-bottom: 1rem;
+            text-align: center;
+        }}
+
+        .success-message {{
+            background: rgba(0, 255, 65, 0.2);
+            color: #00ff41;
+            padding: 1rem;
+            border-radius: 4px;
+            border: 1px solid rgba(0, 255, 65, 0.3);
+        }}
+
+        .error-message {{
+            background: rgba(255, 68, 68, 0.2);
+            color: #ff4444;
+            padding: 1rem;
+            border-radius: 4px;
+            border: 1px solid rgba(255, 68, 68, 0.3);
+        }}
+
+        .help-text {{
+            font-size: 0.9rem;
+            color: #888;
+            margin-top: 0.25rem;
+        }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <div class="logo">🎮 KICK MONITOR</div>
+            <div class="nav-buttons">
+                <a href="/" class="nav-btn">📊 Dashboard</a>
+                <a href="/account" class="nav-btn">⚙️ Account</a>
+                <form method="post" action="/logout" style="display: inline;">
+                    <button type="submit" class="nav-btn logout-btn">🚪 Logout</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h1 class="page-title">⚙️ Account Settings</h1>
+
+        <div id="message-container" class="message-container"></div>
+
+        <!-- Profile Information Section -->
+        <div class="settings-section">
+            <h2 class="section-title">👤 Profile Information</h2>
+            <form method="post" action="/account/update-profile">
+                <div class="form-group">
+                    <label for="username">Username:</label>
+                    <input type="text" id="username" value="{user.username}" class="readonly" readonly>
+                    <div class="help-text">Username cannot be changed</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="email">Email Address:</label>
+                    <input type="email" id="email" name="email" value="{user.email or ''}" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="display_name">Display Name:</label>
+                    <input type="text" id="display_name" name="display_name" value="{user.display_name or ''}" placeholder="Optional display name">
+                </div>
+
+                <button type="submit" class="form-btn">💾 Update Profile</button>
+            </form>
+        </div>
+
+        <!-- Password Change Section -->
+        <div class="settings-section">
+            <h2 class="section-title">🔒 Change Password</h2>
+            <form method="post" action="/account/change-password">
+                <div class="form-group">
+                    <label for="current_password">Current Password:</label>
+                    <input type="password" id="current_password" name="current_password" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="new_password">New Password:</label>
+                    <input type="password" id="new_password" name="new_password" required>
+                    <div class="help-text">Minimum 6 characters</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="confirm_password">Confirm New Password:</label>
+                    <input type="password" id="confirm_password" name="confirm_password" required>
+                </div>
+
+                <button type="submit" class="form-btn danger-btn">🔑 Change Password</button>
+            </form>
+        </div>
+
+        <!-- Account Information Section -->
+        <div class="settings-section">
+            <h2 class="section-title">ℹ️ Account Information</h2>
+            <div class="form-group">
+                <label>Account Role:</label>
+                <input type="text" value="{user.role.value.upper()}" class="readonly" readonly>
+            </div>
+
+            <div class="form-group">
+                <label>Account Status:</label>
+                <input type="text" value="{user.status.value.upper()}" class="readonly" readonly>
+            </div>
+
+            <div class="form-group">
+                <label>Member Since:</label>
+                <input type="text" value="{user.created_at.strftime('%B %d, %Y') if user.created_at else 'Unknown'}" class="readonly" readonly>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Check for messages in URL params
+        const accountUrlParams = new URLSearchParams(window.location.search);
+        const success = accountUrlParams.get('success');
+        const error = accountUrlParams.get('error');
+        const messageContainer = document.getElementById('message-container');
+
+        if (success) {{
+            const messages = {{
+                'profile_updated': 'Profile updated successfully!',
+                'password_changed': 'Password changed successfully!'
+            }};
+            messageContainer.innerHTML = `<div class="success-message">${{messages[success] || 'Operation successful!'}}</div>`;
+        }} else if (error) {{
+            const messages = {{
+                'missing_email': 'Email address is required.',
+                'update_failed': 'Failed to update profile. Please try again.',
+                'missing_fields': 'Please fill in all password fields.',
+                'password_mismatch': 'New passwords do not match.',
+                'password_too_short': 'Password must be at least 6 characters long.',
+                'incorrect_password': 'Current password is incorrect.',
+                'password_change_failed': 'Failed to change password. Please try again.'
+            }};
+            messageContainer.innerHTML = `<div class="error-message">${{messages[error] || 'Operation failed!'}}</div>`;
+        }}
+
+        // Clear URL parameters after showing message
+        if (success || error) {{
+            setTimeout(() => {{
+                const url = new URL(window.location);
+                url.searchParams.delete('success');
+                url.searchParams.delete('error');
+                window.history.replaceState({{}}, '', url);
+            }}, 100);
+        }}
+    </script>
+</body>
+</html>'''
+
     async def _get_admin_users_html(self, user_session) -> str:
         """Generate the admin users management HTML."""
         # Get all users and streamers
