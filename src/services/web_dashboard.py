@@ -2760,22 +2760,18 @@ class WebDashboardService:
         }}
 
         body {{
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            font-family: 'Courier New', monospace;
+            background: #000000;
             color: #ffffff;
             min-height: 100vh;
+            margin: 0;
+            padding: 20px;
         }}
 
         .header {{
-            background: rgba(0, 0, 0, 0.3);
-            padding: 1rem;
-            border-bottom: 2px solid #00ff41;
-            margin-bottom: 2rem;
-        }}
-
-        .header-content {{
-            max-width: 1200px;
-            margin: 0 auto;
+            background: #0a0a0a;
+            padding: 20px;
+            margin-bottom: 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -2784,38 +2780,45 @@ class WebDashboardService:
         .logo {{
             font-size: 1.5rem;
             font-weight: bold;
-            color: #00ff41;
+            color: #ffff00;
         }}
 
         .nav-buttons {{
             display: flex;
-            gap: 1rem;
+            gap: 10px;
+            align-items: center;
         }}
 
         .nav-btn {{
-            background: #00ff41;
-            color: #000;
-            border: none;
-            padding: 0.5rem 1rem;
-            border-radius: 4px;
+            background: #330000;
+            border: 1px solid #ff6600;
+            color: #ff6600;
+            padding: 8px 15px;
             text-decoration: none;
-            font-weight: bold;
+            font-family: 'Courier New', monospace;
             cursor: pointer;
             transition: all 0.3s ease;
         }}
 
         .nav-btn:hover {{
-            background: #00cc34;
-            transform: translateY(-2px);
+            background: #ff6600;
+            color: #000000;
         }}
 
         .logout-btn {{
-            background: #ff4444;
-            color: white;
+            background: #330000;
+            border: 1px solid #ff6600;
+            color: #ff6600;
+            padding: 8px 15px;
+            text-decoration: none;
+            font-family: 'Courier New', monospace;
+            border: none;
+            cursor: pointer;
         }}
 
         .logout-btn:hover {{
-            background: #cc3333;
+            background: #ff6600;
+            color: #000000;
         }}
 
         .container {{
@@ -2827,23 +2830,22 @@ class WebDashboardService:
         .page-title {{
             text-align: center;
             margin-bottom: 2rem;
-            color: #00ff41;
+            color: #ffff00;
             font-size: 2rem;
         }}
 
         .settings-section {{
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
+            background: #0a0a0a;
+            border: 1px solid #ff6600;
             padding: 2rem;
             margin-bottom: 2rem;
-            border: 1px solid rgba(0, 255, 65, 0.3);
         }}
 
         .section-title {{
             font-size: 1.3rem;
-            color: #00ff41;
+            color: #ffff00;
             margin-bottom: 1rem;
-            border-bottom: 1px solid rgba(0, 255, 65, 0.3);
+            border-bottom: 1px solid #ff6600;
             padding-bottom: 0.5rem;
         }}
 
@@ -2854,54 +2856,58 @@ class WebDashboardService:
         label {{
             display: block;
             margin-bottom: 0.5rem;
-            color: #cccccc;
-            font-weight: 500;
+            color: #ff6600;
+            font-weight: normal;
         }}
 
         input[type="text"], input[type="email"], input[type="password"] {{
             width: 100%;
             padding: 0.75rem;
-            border: 1px solid #444;
-            border-radius: 4px;
-            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid #ff6600;
+            background: #000000;
             color: #ffffff;
             font-size: 1rem;
+            font-family: 'Courier New', monospace;
         }}
 
         input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focus {{
             outline: none;
-            border-color: #00ff41;
-            box-shadow: 0 0 5px rgba(0, 255, 65, 0.3);
+            border-color: #ffff00;
+            background: #0a0a0a;
         }}
 
         .readonly {{
-            background: rgba(255, 255, 255, 0.05);
+            background: #1a1a1a;
+            color: #888888;
             cursor: not-allowed;
         }}
 
         .form-btn {{
-            background: #00ff41;
-            color: #000;
-            border: none;
+            background: #330000;
+            border: 1px solid #ff6600;
+            color: #ff6600;
             padding: 0.75rem 2rem;
-            border-radius: 4px;
-            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            font-weight: normal;
             cursor: pointer;
             transition: all 0.3s ease;
+            margin-right: 10px;
         }}
 
         .form-btn:hover {{
-            background: #00cc34;
-            transform: translateY(-2px);
+            background: #ff6600;
+            color: #000000;
         }}
 
         .danger-btn {{
-            background: #ff4444;
-            color: white;
+            background: #330000;
+            border: 1px solid #ff6600;
+            color: #ff6600;
         }}
 
         .danger-btn:hover {{
-            background: #cc3333;
+            background: #ff6600;
+            color: #000000;
         }}
 
         .message-container {{
@@ -2910,25 +2916,26 @@ class WebDashboardService:
         }}
 
         .success-message {{
-            background: rgba(0, 255, 65, 0.2);
-            color: #00ff41;
+            background: #0a0a0a;
+            color: #00ff00;
             padding: 1rem;
-            border-radius: 4px;
-            border: 1px solid rgba(0, 255, 65, 0.3);
+            border: 1px solid #00ff00;
+            font-family: 'Courier New', monospace;
         }}
 
         .error-message {{
-            background: rgba(255, 68, 68, 0.2);
-            color: #ff4444;
+            background: #0a0a0a;
+            color: #ff6600;
             padding: 1rem;
-            border-radius: 4px;
-            border: 1px solid rgba(255, 68, 68, 0.3);
+            border: 1px solid #ff6600;
+            font-family: 'Courier New', monospace;
         }}
 
         .help-text {{
             font-size: 0.9rem;
             color: #888;
             margin-top: 0.25rem;
+            font-family: 'Courier New', monospace;
         }}
     </style>
 </head>
