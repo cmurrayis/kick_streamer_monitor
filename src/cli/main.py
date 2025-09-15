@@ -484,8 +484,9 @@ async def run_command(args: argparse.Namespace) -> int:
     elif args.quiet:
         log_level = logging.WARNING
     else:
-        # Check environment variable for LOG_LEVEL
-        env_log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
+        # Check environment variable for LOG_LEVEL (try both SYSTEM_LOG_LEVEL and LOG_LEVEL)
+        env_log_level = os.getenv('SYSTEM_LOG_LEVEL') or os.getenv('LOG_LEVEL', 'INFO')
+        env_log_level = env_log_level.upper()
         try:
             log_level = getattr(logging, env_log_level)
         except AttributeError:

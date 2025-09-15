@@ -76,8 +76,9 @@ class ServiceCommands:
             if cli_log_level:
                 log_level = cli_log_level
             else:
-                # Check environment variable for LOG_LEVEL
-                env_log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
+                # Check environment variable for LOG_LEVEL (try both SYSTEM_LOG_LEVEL and LOG_LEVEL)
+                env_log_level = os.getenv('SYSTEM_LOG_LEVEL') or os.getenv('LOG_LEVEL', 'INFO')
+                env_log_level = env_log_level.upper()
                 log_level = env_log_level
 
             browser_fallback = getattr(args, 'browser_fallback', True)
