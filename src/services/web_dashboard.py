@@ -1368,12 +1368,7 @@ class WebDashboardService:
 
             status_grid = await self.database_service.get_streamer_status_grid()
 
-            # Convert datetime objects to ISO strings for JSON serialization
-            for streamer in status_grid:
-                if streamer.get('last_seen_online'):
-                    streamer['last_seen'] = streamer['last_seen_online'].isoformat()
-
-            return Response(text=json.dumps(status_grid), content_type='application/json')
+            return Response(text=json.dumps(status_grid, default=str), content_type='application/json')
 
         except Exception as e:
             logger.error(f"Status grid API error: {e}")
@@ -1392,12 +1387,7 @@ class WebDashboardService:
 
             recent_events = await self.database_service.get_recent_status_events(limit)
 
-            # Convert datetime objects to ISO strings
-            for event in recent_events:
-                if event.get('event_timestamp'):
-                    event['event_timestamp'] = event['event_timestamp'].isoformat()
-
-            return Response(text=json.dumps(recent_events), content_type='application/json')
+            return Response(text=json.dumps(recent_events, default=str), content_type='application/json')
 
         except Exception as e:
             logger.error(f"Recent activity API error: {e}")
@@ -1414,7 +1404,7 @@ class WebDashboardService:
                 }), content_type='application/json')
 
             health_metrics = await self.database_service.get_system_health_metrics()
-            return Response(text=json.dumps(health_metrics), content_type='application/json')
+            return Response(text=json.dumps(health_metrics, default=str), content_type='application/json')
 
         except Exception as e:
             logger.error(f"System health API error: {e}")
@@ -1434,7 +1424,7 @@ class WebDashboardService:
                               content_type='application/json')
 
             viewer_analytics = await self.database_service.get_viewer_analytics_summary()
-            return Response(text=json.dumps(viewer_analytics), content_type='application/json')
+            return Response(text=json.dumps(viewer_analytics, default=str), content_type='application/json')
 
         except Exception as e:
             logger.error(f"Viewer analytics API error: {e}")
