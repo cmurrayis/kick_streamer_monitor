@@ -52,6 +52,10 @@ class StreamerBase(BaseModel):
     last_seen_online: Optional[datetime] = Field(None, description="Timestamp of last online detection")
     last_status_update: Optional[datetime] = Field(None, description="Timestamp of most recent status change")
     is_active: bool = Field(True, description="Whether monitoring is enabled")
+    current_viewers: Optional[int] = Field(None, description="Current live viewer count")
+    peak_viewers: Optional[int] = Field(None, description="Peak viewer count during current/last stream")
+    avg_viewers: Optional[int] = Field(None, description="Average viewer count across all streams")
+    livestream_id: Optional[int] = Field(None, description="Current livestream ID from Kick API")
     
     @validator('username')
     def validate_username(cls, v):
@@ -80,7 +84,21 @@ class StreamerBase(BaseModel):
         if v and v > datetime.now(timezone.utc):
             raise ValueError("Last status update cannot be in the future")
         return v
-    
+
+    @validator('current_viewers', 'peak_viewers', 'avg_viewers')
+    def validate_viewer_counts(cls, v):
+        """Validate viewer counts are non-negative if provided."""
+        if v is not None and v < 0:
+            raise ValueError("Viewer counts cannot be negative")
+        return v
+
+    @validator('livestream_id')
+    def validate_livestream_id(cls, v):
+        """Validate livestream_id is positive if provided."""
+        if v is not None and v <= 0:
+            raise ValueError("Livestream ID must be positive")
+        return v
+
     @model_validator(mode='before')
     @classmethod
     def validate_status_consistency(cls, values):

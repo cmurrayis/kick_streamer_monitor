@@ -33,6 +33,7 @@ class StatusEventBase(BaseModel):
     received_timestamp: Optional[datetime] = Field(None, description="When our service received the event")
     processed_timestamp: Optional[datetime] = Field(None, description="When the database was updated")
     event_data: Optional[Dict[str, Any]] = Field(None, description="Raw event data from Kick.com")
+    viewer_count: Optional[int] = Field(None, description="Number of viewers at time of event")
     
     @validator('event_timestamp')
     def validate_event_timestamp(cls, v):
@@ -51,6 +52,13 @@ class StatusEventBase(BaseModel):
         """Validate kick_event_id format if provided."""
         if v is not None and not isinstance(v, str):
             raise ValueError("Kick event ID must be a string")
+        return v
+
+    @validator('viewer_count')
+    def validate_viewer_count(cls, v):
+        """Validate viewer_count is non-negative if provided."""
+        if v is not None and v < 0:
+            raise ValueError("Viewer count cannot be negative")
         return v
     
     @model_validator(mode='before')

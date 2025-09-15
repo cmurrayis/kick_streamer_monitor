@@ -1176,6 +1176,15 @@ class DatabaseService:
 
             recent_activity = await conn.fetchval(recent_activity_query)
 
+            # Get total current viewers across all live streams
+            total_viewers_query = """
+            SELECT COALESCE(SUM(current_viewers), 0) as total_viewers
+            FROM streamer
+            WHERE status = 'online' AND current_viewers IS NOT NULL
+            """
+
+            total_viewers = await conn.fetchval(total_viewers_query)
+
             return {
                 "total_streamers": stats["total_streamers"],
                 "online_streamers": stats["online_streamers"],
@@ -1253,3 +1262,103 @@ class DatabaseService:
                 "system_uptime": "operational",  # Would calculate actual uptime
                 "last_health_check": datetime.now(timezone.utc).isoformat()
             }
+
+    async def get_viewer_analytics_summary(self) -> Dict[str, Any]:
+        """Get viewer count analytics summary."""
+        async with self.get_connection() as conn:
+            # Get current total viewers across all live streams
+            current_viewers_query = """
+            SELECT COALESCE(SUM(current_viewers), 0) as total_current_viewers,
+                   COUNT(CASE WHEN current_viewers > 0 THEN 1 END) as streams_with_viewers
+            FROM streamer
+            WHERE status = 'online' AND current_viewers IS NOT NULL
+            """
+
+            current_stats = await conn.fetchrow(current_viewers_query)
+
+            # Get peak viewer statistics
+            peak_viewers_query = """
+            SELECT MAX(viewer_count) as peak_viewers_today,
+                   AVG(viewer_count) as avg_viewers_today,
+                   COUNT(*) as viewer_events_today
+            FROM status_event
+            WHERE event_timestamp >= CURRENT_DATE
+            AND viewer_count IS NOT NULL
+            """
+
+            peak_stats = await conn.fetchrow(peak_viewers_query)
+
+            # Get top streamers by current viewers
+            top_streamers_query = """
+            SELECT username, current_viewers, peak_viewers
+            FROM streamer
+            WHERE current_viewers > 0
+            ORDER BY current_viewers DESC
+            LIMIT 5
+            """
+
+            top_streamers = await conn.fetch(top_streamers_query)
+
+            return {
+                "total_current_viewers": current_stats["total_current_viewers"],
+                "streams_with_viewers": current_stats["streams_with_viewers"],
+                "peak_viewers_today": peak_stats["peak_viewers_today"],
+                "avg_viewers_today": float(peak_stats["avg_viewers_today"]) if peak_stats["avg_viewers_today"] else 0,
+                "viewer_events_today": peak_stats["viewer_events_today"],
+                "top_streamers": [dict(streamer) for streamer in top_streamers],
+                "last_updated": datetime.now(timezone.utc).isoformat()
+            }
+
+    async def get_streamer_viewer_history(self, streamer_id: int, hours: int = 24) -> List[Dict[str, Any]]:
+        """Get viewer count history for a specific streamer."""
+        async with self.get_connection() as conn:
+            query = """
+            SELECT event_timestamp, viewer_count, event_type
+            FROM status_event
+            WHERE streamer_id = $1
+            AND event_timestamp >= NOW() - INTERVAL '%s hours'
+            AND viewer_count IS NOT NULL
+            ORDER BY event_timestamp ASC
+            """ % hours
+
+            records = await conn.fetch(query, streamer_id)
+            return [dict(record) for record in records]
+
+    async def update_streamer_viewer_stats(self, streamer_id: int, current_viewers: int,
+                                         livestream_id: Optional[int] = None) -> bool:
+        """Update streamer's current viewer count and related stats."""
+        async with self.transaction() as conn:
+            # Get current peak for this stream session
+            peak_query = "SELECT peak_viewers FROM streamer WHERE id = $1"
+            current_peak = await conn.fetchval(peak_query, streamer_id)
+
+            # Update current viewers and peak if necessary
+            update_query = """
+            UPDATE streamer
+            SET current_viewers = $1,
+                peak_viewers = GREATEST(COALESCE(peak_viewers, 0), $1),
+                livestream_id = $2,
+                last_status_update = NOW()
+            WHERE id = $3
+            """
+
+            result = await conn.execute(update_query, current_viewers, livestream_id, streamer_id)
+            return result == "UPDATE 1"
+
+    async def get_viewer_trends(self, days: int = 7) -> List[Dict[str, Any]]:
+        """Get viewer count trends over time."""
+        async with self.get_connection() as conn:
+            query = """
+            SELECT DATE(event_timestamp) as date,
+                   MAX(viewer_count) as peak_viewers,
+                   AVG(viewer_count) as avg_viewers,
+                   COUNT(DISTINCT streamer_id) as active_streamers
+            FROM status_event
+            WHERE event_timestamp >= CURRENT_DATE - INTERVAL '%s days'
+            AND viewer_count IS NOT NULL
+            GROUP BY DATE(event_timestamp)
+            ORDER BY date ASC
+            """ % days
+
+            records = await conn.fetch(query)
+            return [dict(record) for record in records]

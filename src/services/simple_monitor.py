@@ -172,16 +172,30 @@ class SimpleMonitorService:
                 return 'offline'
             
             # Parse livestream status (same logic as your JS)
-            is_live = data.get('livestream') and data['livestream'].get('is_live', False)
+            livestream = data.get('livestream')
+            is_live = livestream and livestream.get('is_live', False)
             new_status = 'online' if is_live else 'offline'
-            
-            # Update database if status changed
-            if new_status != streamer.status.value:
-                await self._update_streamer_status(streamer, new_status)
-                
+
+            # Extract viewer count and livestream ID for analytics
+            viewer_count = None
+            livestream_id = None
+            if livestream and is_live:
+                viewer_count = livestream.get('viewer_count') or livestream.get('viewers')
+                livestream_id = livestream.get('id')
+
+                # Log viewer count for monitoring
+                if viewer_count is not None:
+                    logger.debug(f'{streamer.username} has {viewer_count} viewers')
+
+            # Update database if status changed or if we have viewer data to update
+            should_update = (new_status != streamer.status.value) or (viewer_count is not None)
+
+            if should_update:
+                await self._update_streamer_status(streamer, new_status, viewer_count, livestream_id)
+
                 # Update playback URL if live (like your JS)
-                if is_live and data['livestream'].get('playback_url'):
-                    await self._update_playback_url(streamer, data['livestream']['playback_url'])
+                if is_live and livestream.get('playback_url'):
+                    await self._update_playback_url(streamer, livestream['playback_url'])
             
             return new_status
             
@@ -189,8 +203,10 @@ class SimpleMonitorService:
             logger.error(f'Failed to process {streamer.username}: {e}')
             return 'error'
     
-    async def _update_streamer_status(self, streamer: Streamer, new_status: str):
-        """Update streamer status in database."""
+    async def _update_streamer_status(self, streamer: Streamer, new_status: str,
+                                     viewer_count: Optional[int] = None,
+                                     livestream_id: Optional[int] = None):
+        """Update streamer status in database with viewer count."""
         try:
             # Convert string to enum
             if new_status == 'online':
@@ -215,7 +231,13 @@ class SimpleMonitorService:
             )
             
             if updated_streamer:
-                # Create status event
+                # Update viewer statistics if we have viewer data
+                if viewer_count is not None and new_status == 'online':
+                    await self.database_service.update_streamer_viewer_stats(
+                        streamer.id, viewer_count, livestream_id
+                    )
+
+                # Create status event with viewer count
                 event_create = StatusEventCreate(
                     streamer_id=streamer.id,
                     event_type=event_type,
@@ -223,9 +245,12 @@ class SimpleMonitorService:
                     new_status=status_enum,
                     event_timestamp=datetime.now(timezone.utc),
                     received_timestamp=datetime.now(timezone.utc),
-                    event_data={}
+                    event_data={
+                        'livestream_id': livestream_id if livestream_id else None
+                    },
+                    viewer_count=viewer_count
                 )
-                
+
                 await self.database_service.create_status_event(event_create)
                 
                 logger.info(f"Updated {streamer.username}: {streamer.status.value} -> {new_status}")
@@ -312,6 +337,9 @@ class SimpleMonitorService:
                     "status": streamer.status.value,
                     "last_seen_online": streamer.last_seen_online.isoformat() if streamer.last_seen_online else None,
                     "last_status_update": streamer.last_status_update.isoformat() if streamer.last_status_update else None,
+                    "current_viewers": getattr(streamer, 'current_viewers', None),
+                    "peak_viewers": getattr(streamer, 'peak_viewers', None),
+                    "avg_viewers": getattr(streamer, 'avg_viewers', None),
                     "is_subscribed": False,  # Simple mode doesn't use subscriptions
                     "subscription_time": None,
                     "consecutive_failures": 0,  # Simple mode doesn't track this
