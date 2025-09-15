@@ -941,29 +941,52 @@ class WebDashboardService:
             return Response(status=401, text="Unauthorized")
         
         try:
+            logger.info("Starting assignments summary API call")
             users = await self.database_service.get_all_users()
+            logger.info(f"Found {len(users)} users for assignments summary")
+            
             summary_data = []
             
             for user in users:
-                if user.role.value != 'admin':  # Skip admin users
-                    assignments = await self.database_service.get_user_streamer_assignments(user.id)
-                    streamer_names = []
-                    
-                    for assignment in assignments:
-                        streamer = await self.database_service.get_streamer_by_id(assignment.streamer_id)
-                        if streamer:
-                            streamer_names.append(streamer.username)
-                    
-                    summary_data.append({
-                        'user_id': user.id,
-                        'username': user.username,
-                        'streamers': streamer_names
-                    })
+                try:
+                    if user.role.value != 'admin':  # Skip admin users
+                        logger.info(f"Getting assignments for user {user.id} ({user.username})")
+                        try:
+                            assignments = await self.database_service.get_user_streamer_assignments(user.id)
+                            logger.info(f"Found {len(assignments)} assignments for user {user.username}")
+                        except Exception as assignment_error:
+                            logger.error(f"Error getting assignments for user {user.username}: {assignment_error}")
+                            # Continue with empty assignments if the table doesn't exist or has issues
+                            assignments = []
+                        
+                        streamer_names = []
+                        for assignment in assignments:
+                            try:
+                                streamer = await self.database_service.get_streamer_by_id(assignment.streamer_id)
+                                if streamer:
+                                    streamer_names.append(streamer.username)
+                                    logger.info(f"Added streamer {streamer.username} for user {user.username}")
+                                else:
+                                    logger.warning(f"Streamer with ID {assignment.streamer_id} not found")
+                            except Exception as streamer_error:
+                                logger.error(f"Error getting streamer {assignment.streamer_id}: {streamer_error}")
+                        
+                        summary_data.append({
+                            'user_id': user.id,
+                            'username': user.username,
+                            'streamers': streamer_names
+                        })
+                        logger.info(f"Added summary for user {user.username}: {len(streamer_names)} streamers")
+                except Exception as user_error:
+                    logger.error(f"Error processing user {user.username}: {user_error}")
             
+            logger.info(f"Returning {len(summary_data)} user summaries")
             return Response(text=json.dumps(summary_data), content_type='application/json')
         except Exception as e:
             logger.error(f"Error fetching assignments summary API: {e}")
-            return Response(status=500, text="Internal server error")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            return Response(status=500, text=f"Internal server error: {str(e)}")
     
     async def _handle_api_debug_users(self, request: Request) -> Response:
         """Debug API endpoint to check users without auth."""
@@ -2691,9 +2714,23 @@ class WebDashboardService:
                     console.error('Failed to load assignment summary:', response.status, response.statusText);
                     const text = await response.text();
                     console.error('Response body:', text);
+                    
+                    // Show error in UI instead of just "Loading..."
+                    document.querySelectorAll('.assignments-cell').forEach(cell => {{
+                        if (cell.textContent === 'Loading...') {{
+                            cell.innerHTML = '<span style="color: #ff6666;">Error loading</span>';
+                        }}
+                    }});
                 }}
             }} catch (error) {{
                 console.error('Error loading assignment counts:', error);
+                
+                // Show error in UI instead of just "Loading..."
+                document.querySelectorAll('.assignments-cell').forEach(cell => {{
+                    if (cell.textContent === 'Loading...') {{
+                        cell.innerHTML = '<span style="color: #ff6666;">Error loading</span>';
+                    }}
+                }});
             }}
         }}
 
