@@ -292,10 +292,51 @@ class SimpleMonitorService:
                 await self.database_service.update_streamer_viewer_stats(
                     streamer.id, viewer_count, livestream_id
                 )
+
+                # Create a viewer tracking event for analytics without status validation
+                # This ensures we have historical viewer data even when status doesn't change
+                from datetime import datetime, timezone
+                await self._create_viewer_tracking_event(streamer, viewer_count, livestream_id)
                 logger.debug(f"Updated viewer count for {streamer.username}: {viewer_count}")
 
         except Exception as e:
             logger.error(f"Error updating viewer data for {streamer.username}: {e}")
+
+    async def _create_viewer_tracking_event(self, streamer: Streamer, viewer_count: int, livestream_id: Optional[int] = None):
+        """Create a viewer tracking event for analytics without status validation."""
+        try:
+            # Insert directly into database without going through status validation
+            async with self.database_service.get_connection() as conn:
+                query = """
+                INSERT INTO status_event (
+                    streamer_id, event_type, previous_status, new_status,
+                    event_timestamp, received_timestamp, processed_timestamp,
+                    event_data, viewer_count
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                """
+
+                now = datetime.now(timezone.utc)
+                event_data = {
+                    'viewer_tracking': True,
+                    'livestream_id': livestream_id if livestream_id else None
+                }
+
+                await conn.execute(
+                    query,
+                    streamer.id,  # streamer_id
+                    'viewer_update',  # event_type (custom type for tracking)
+                    streamer.status.value,  # previous_status
+                    streamer.status.value,  # new_status (same - no status change)
+                    now,  # event_timestamp
+                    now,  # received_timestamp
+                    now,  # processed_timestamp
+                    event_data,  # event_data (JSON)
+                    viewer_count  # viewer_count
+                )
+
+        except Exception as e:
+            logger.debug(f"Could not create viewer tracking event for {streamer.username}: {e}")
+            # Don't error out - this is just for analytics
 
     async def _update_profile_data(self, streamer: Streamer, profile_updates: dict):
         """Update streamer profile information."""
