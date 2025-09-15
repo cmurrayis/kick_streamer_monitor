@@ -1261,7 +1261,15 @@ class DatabaseService:
                 "last_status_change": last_change.isoformat() if last_change else None,
                 "recent_errors": error_count or 0,
                 "system_uptime": "operational",  # Would calculate actual uptime
-                "last_health_check": datetime.now(timezone.utc).isoformat()
+                "last_health_check": datetime.now(timezone.utc).isoformat(),
+                "connections": {
+                    "database_connected": True
+                },
+                "processing": {
+                    "success_rate": 100.0,  # Placeholder - would get from monitoring service
+                    "total_checks": 0,
+                    "failed_checks": error_count or 0
+                }
             }
 
     async def get_viewer_analytics_summary(self) -> Dict[str, Any]:
@@ -1272,7 +1280,7 @@ class DatabaseService:
             SELECT COALESCE(SUM(current_viewers), 0) as total_current_viewers,
                    COUNT(CASE WHEN current_viewers > 0 THEN 1 END) as streams_with_viewers
             FROM streamer
-            WHERE status = 'online' AND current_viewers IS NOT NULL
+            WHERE status::text = 'online' AND current_viewers IS NOT NULL
             """
 
             current_stats = await conn.fetchrow(current_viewers_query)
@@ -1301,11 +1309,13 @@ class DatabaseService:
             top_streamers = await conn.fetch(top_streamers_query)
 
             return {
-                "total_current_viewers": current_stats["total_current_viewers"],
-                "streams_with_viewers": current_stats["streams_with_viewers"],
-                "peak_viewers_today": peak_stats["peak_viewers_today"],
-                "avg_viewers_today": float(peak_stats["avg_viewers_today"]) if peak_stats["avg_viewers_today"] else 0,
-                "viewer_events_today": peak_stats["viewer_events_today"],
+                "summary": {
+                    "total_current_viewers": current_stats["total_current_viewers"],
+                    "live_streams_with_viewers": current_stats["streams_with_viewers"],
+                    "peak_viewers_today": peak_stats["peak_viewers_today"] or 0,
+                    "avg_viewers_24h": float(peak_stats["avg_viewers_today"]) if peak_stats["avg_viewers_today"] else 0,
+                    "viewer_events_today": peak_stats["viewer_events_today"]
+                },
                 "top_streamers": [dict(streamer) for streamer in top_streamers],
                 "last_updated": datetime.now(timezone.utc).isoformat()
             }

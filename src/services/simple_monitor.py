@@ -187,6 +187,24 @@ class SimpleMonitorService:
                 if viewer_count is not None:
                     logger.debug(f'{streamer.username} has {viewer_count} viewers')
 
+            # Extract additional streamer metadata from channel data
+            profile_updates = {}
+            if data:
+                # Extract profile information that might be available
+                if 'bio' in data:
+                    profile_updates['bio'] = data['bio']
+                if 'profile_picture' in data:
+                    profile_updates['profile_picture_url'] = data['profile_picture']
+                elif 'avatar' in data:
+                    profile_updates['profile_picture_url'] = data['avatar']
+                if 'followers_count' in data:
+                    profile_updates['follower_count'] = data['followers_count']
+                elif 'followersCount' in data:
+                    profile_updates['follower_count'] = data['followersCount']
+
+                # Always update is_live status
+                profile_updates['is_live'] = is_live
+
             # Handle status changes and viewer data updates separately
             status_changed = new_status != streamer.status.value
 
@@ -196,6 +214,10 @@ class SimpleMonitorService:
             elif viewer_count is not None:
                 # Status same but we have viewer data to update
                 await self._update_viewer_data_only(streamer, viewer_count, livestream_id)
+
+            # Update profile information if we have any changes
+            if profile_updates:
+                await self._update_profile_data(streamer, profile_updates)
 
             # Update playback URL if live (like your JS)
             if is_live and livestream.get('playback_url'):
@@ -274,6 +296,36 @@ class SimpleMonitorService:
 
         except Exception as e:
             logger.error(f"Error updating viewer data for {streamer.username}: {e}")
+
+    async def _update_profile_data(self, streamer: Streamer, profile_updates: dict):
+        """Update streamer profile information."""
+        try:
+            # Build update query dynamically based on available fields
+            update_fields = []
+            values = []
+            param_count = 1
+
+            for field, value in profile_updates.items():
+                if value is not None:  # Only update non-null values
+                    update_fields.append(f"{field} = ${param_count}")
+                    values.append(value)
+                    param_count += 1
+
+            if update_fields:
+                query = f"""
+                UPDATE streamer
+                SET {', '.join(update_fields)}, updated_at = NOW()
+                WHERE id = ${param_count}
+                """
+                values.append(streamer.id)
+
+                async with self.database_service.get_connection() as conn:
+                    await conn.execute(query, *values)
+
+                logger.debug(f"Updated profile for {streamer.username}: {list(profile_updates.keys())}")
+
+        except Exception as e:
+            logger.error(f"Error updating profile data for {streamer.username}: {e}")
 
     async def _update_playback_url(self, streamer: Streamer, playback_url: str):
         """Update playback URL for live streamer."""
