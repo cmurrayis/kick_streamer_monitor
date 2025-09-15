@@ -2018,8 +2018,15 @@ class WebDashboardService:
                 else:
                     viewer_display = "-"
 
+                # Generate profile picture HTML
+                if hasattr(streamer, 'profile_picture_url') and streamer.profile_picture_url:
+                    profile_pic = f'<img src="{streamer.profile_picture_url}" alt="{streamer.username}" style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid #00ff00; object-fit: cover;">'
+                else:
+                    profile_pic = f'<div style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid #00ff00; background: #003300; display: flex; align-items: center; justify-content: center; color: #00ff00; font-size: 12px;">{streamer.username[0].upper()}</div>'
+
                 streamer_rows += f'''
                     <tr data-streamer-id="{streamer.id}">
+                        <td class="profile-pic-column">{profile_pic}</td>
                         <td>{streamer.username}</td>
                         <td class="{status_class} streamer-status">{streamer.status.upper()}</td>
                         <td class="viewer-count">{viewer_display}</td>
@@ -2032,6 +2039,7 @@ class WebDashboardService:
             <table class="streamers-table" id="streamers-table">
                 <thead>
                     <tr>
+                        <th class="profile-pic-column">Profile</th>
                         <th>Streamer</th>
                         <th>Status</th>
                         <th>Viewers</th>
@@ -2149,6 +2157,11 @@ class WebDashboardService:
         .status-online {{ color: #00ff00; }}
         .status-offline {{ color: #ff6666; }}
         .status-unknown {{ color: #ffff00; }}
+        .profile-pic-column {{
+            width: 50px;
+            text-align: center;
+            padding: 8px;
+        }}
         .viewer-count {{
             color: #00ccff;
             font-weight: bold;
@@ -2609,6 +2622,11 @@ class WebDashboardService:
         .status-online { color: #00ff00; }
         .status-offline { color: #ff6600; }
         .status-unknown { color: #666666; }
+        .profile-pic-column {
+            width: 50px;
+            text-align: center;
+            padding: 8px;
+        }
         .success-message, .error-message {
             padding: 10px;
             margin-bottom: 20px;
@@ -2653,6 +2671,7 @@ class WebDashboardService:
             <thead>
                 <tr>
                     <th>ID</th>
+                    <th class="profile-pic-column">Profile</th>
                     <th>Username</th>
                     <th>Status</th>
                     <th>Last Seen Online</th>
@@ -2661,7 +2680,7 @@ class WebDashboardService:
                 </tr>
             </thead>
             <tbody id="streamers-tbody">
-                <tr><td colspan="6" style="text-align: center;">Loading streamers...</td></tr>
+                <tr><td colspan="7" style="text-align: center;">Loading streamers...</td></tr>
             </tbody>
         </table>
     </div>
@@ -2702,7 +2721,7 @@ class WebDashboardService:
                 const tbody = document.getElementById('streamers-tbody');
                 
                 if (!streamers || streamers.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">No streamers found</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No streamers found</td></tr>';
                     return;
                 }
                 
@@ -2713,9 +2732,14 @@ class WebDashboardService:
                     const lastUpdate = streamer.last_status_update ? 
                         new Date(streamer.last_status_update).toLocaleString() : 'Never';
                     
+                    const profilePicture = streamer.profile_picture_url ?
+                        `<img src="${streamer.profile_picture_url}" alt="${streamer.username}" style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid #ff6600; object-fit: cover;">` :
+                        `<div style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid #ff6600; background: #0a0a0a; display: flex; align-items: center; justify-content: center; color: #ff6600; font-size: 12px;">${streamer.username.charAt(0).toUpperCase()}</div>`;
+
                     return `
                         <tr>
                             <td>${streamer.id}</td>
+                            <td class="profile-pic-column">${profilePicture}</td>
                             <td>${streamer.username}</td>
                             <td class="${statusClass}">${streamer.status.toUpperCase()}</td>
                             <td>${lastSeen}</td>
@@ -2763,8 +2787,11 @@ class WebDashboardService:
             font-family: 'Courier New', monospace;
             background: #000000;
             color: #ffffff;
-            min-height: 100vh;
             margin: 0;
+            padding: 0;
+        }}
+
+        .container {{
             padding: 20px;
         }}
 
@@ -2777,32 +2804,8 @@ class WebDashboardService:
             align-items: center;
         }}
 
-        .logo {{
-            font-size: 1.5rem;
-            font-weight: bold;
+        .user-info {{
             color: #ffff00;
-        }}
-
-        .nav-buttons {{
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }}
-
-        .nav-btn {{
-            background: #330000;
-            border: 1px solid #ff6600;
-            color: #ff6600;
-            padding: 8px 15px;
-            text-decoration: none;
-            font-family: 'Courier New', monospace;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }}
-
-        .nav-btn:hover {{
-            background: #ff6600;
-            color: #000000;
         }}
 
         .logout-btn {{
@@ -2819,12 +2822,6 @@ class WebDashboardService:
         .logout-btn:hover {{
             background: #ff6600;
             color: #000000;
-        }}
-
-        .container {{
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 0 1rem;
         }}
 
         .page-title {{
@@ -2940,21 +2937,19 @@ class WebDashboardService:
     </style>
 </head>
 <body>
-    <div class="header">
-        <div class="header-content">
-            <div class="logo">🎮 KICK MONITOR</div>
-            <div class="nav-buttons">
-                <a href="/" class="nav-btn">📊 Dashboard</a>
-                <a href="/account" class="nav-btn">⚙️ Account</a>
-                <form method="post" action="/logout" style="display: inline;">
-                    <button type="submit" class="nav-btn logout-btn">🚪 Logout</button>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>⚙️ ACCOUNT SETTINGS</h1>
+                <div class="user-info">Logged in as: {user.username} ({user.role.value.upper()})</div>
+            </div>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <a href="/" style="background: #666666; color: white; padding: 8px 16px; border-radius: 4px; text-decoration: none; font-weight: bold; transition: background 0.3s;" onmouseover="this.style.background='#555555'" onmouseout="this.style.background='#666666'">📊 DASHBOARD</a>
+                <form method="post" action="/logout" style="margin: 0;">
+                    <button type="submit" class="logout-btn">LOGOUT</button>
                 </form>
             </div>
         </div>
-    </div>
-
-    <div class="container">
-        <h1 class="page-title">⚙️ Account Settings</h1>
 
         <div id="message-container" class="message-container"></div>
 
@@ -3062,6 +3057,7 @@ class WebDashboardService:
             }}, 100);
         }}
     </script>
+    </div>
 </body>
 </html>'''
 
