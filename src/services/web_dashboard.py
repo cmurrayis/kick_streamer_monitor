@@ -1404,6 +1404,19 @@ class WebDashboardService:
                 }), content_type='application/json')
 
             health_metrics = await self.database_service.get_system_health_metrics()
+
+            # Get real monitoring statistics if available
+            if hasattr(self.monitor_service, 'get_monitoring_stats'):
+                monitor_stats = self.monitor_service.get_monitoring_stats()
+                processing_stats = monitor_stats.get('processing', {})
+
+                # Update health metrics with real monitoring data
+                health_metrics['processing'] = {
+                    'success_rate': processing_stats.get('success_rate', 0),
+                    'total_checks': processing_stats.get('total_checks', 0),
+                    'failed_checks': processing_stats.get('failed_checks', 0)
+                }
+
             return Response(text=json.dumps(health_metrics, default=str), content_type='application/json')
 
         except Exception as e:

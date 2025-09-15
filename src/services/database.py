@@ -1264,11 +1264,6 @@ class DatabaseService:
                 "last_health_check": datetime.now(timezone.utc).isoformat(),
                 "connections": {
                     "database_connected": True
-                },
-                "processing": {
-                    "success_rate": 100.0,  # Placeholder - would get from monitoring service
-                    "total_checks": 0,
-                    "failed_checks": error_count or 0
                 }
             }
 
