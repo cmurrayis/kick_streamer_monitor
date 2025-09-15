@@ -1370,8 +1370,8 @@ class WebDashboardService:
 
             # Convert datetime objects to ISO strings for JSON serialization
             for streamer in status_grid:
-                if streamer.get('last_seen'):
-                    streamer['last_seen'] = streamer['last_seen'].isoformat()
+                if streamer.get('last_seen_online'):
+                    streamer['last_seen'] = streamer['last_seen_online'].isoformat()
 
             return Response(text=json.dumps(status_grid), content_type='application/json')
 

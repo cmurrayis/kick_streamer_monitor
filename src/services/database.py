@@ -1200,8 +1200,9 @@ class DatabaseService:
         """Get recent status change events with streamer details."""
         async with self.get_connection() as conn:
             query = """
-            SELECT se.id, se.event_type, se.event_timestamp, se.metadata,
-                   s.username, s.kick_user_id, s.status as current_status
+            SELECT se.id, se.event_type, se.event_timestamp, se.event_data,
+                   se.viewer_count, se.previous_status, se.new_status,
+                   s.username as streamer_username, s.kick_user_id, s.status as current_status
             FROM status_event se
             JOIN streamer s ON se.streamer_id = s.id
             ORDER BY se.event_timestamp DESC
@@ -1215,13 +1216,13 @@ class DatabaseService:
         """Get streamers with their current status for dashboard grid."""
         async with self.get_connection() as conn:
             query = """
-            SELECT s.id, s.username, s.kick_user_id, s.status, s.last_seen,
-                   s.profile_picture, s.follower_count, s.is_verified,
+            SELECT s.id, s.username, s.kick_user_id, s.status, s.last_seen_online,
+                   s.profile_picture_url, s.follower_count, s.is_verified,
                    COUNT(usa.user_id) as assigned_users_count
             FROM streamer s
             LEFT JOIN user_streamer_assignments usa ON s.id = usa.streamer_id
-            GROUP BY s.id, s.username, s.kick_user_id, s.status, s.last_seen,
-                     s.profile_picture, s.follower_count, s.is_verified
+            GROUP BY s.id, s.username, s.kick_user_id, s.status, s.last_seen_online,
+                     s.profile_picture_url, s.follower_count, s.is_verified
             ORDER BY s.status DESC, s.username ASC
             """
 
@@ -1249,7 +1250,7 @@ class DatabaseService:
             SELECT COUNT(*) as error_count
             FROM status_event
             WHERE event_timestamp >= NOW() - INTERVAL '1 hour'
-            AND metadata::text LIKE '%error%'
+            AND event_data::text LIKE '%error%'
             """
 
             error_count = await conn.fetchval(error_count_query)
