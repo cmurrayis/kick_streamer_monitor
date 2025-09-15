@@ -255,8 +255,8 @@ Report issues at: https://github.com/your-org/kick-monitor/issues
     service_parser.add_argument(
         '--log-level',
         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
-        default='INFO',
-        help='Set logging level (default: INFO)'
+        default=None,
+        help='Set logging level (default: from environment or INFO)'
     )
     service_parser.add_argument(
         '--browser-fallback',

@@ -64,38 +64,22 @@ class ServiceCommands:
             admin_username = getattr(args, 'admin_username', 'admin')
             admin_password = getattr(args, 'admin_password', 'password')
             # Load .env file if available for service configuration
-            env_file_loaded = None
             if DOTENV_AVAILABLE:
                 env_file = Path('.env')
                 if not env_file.exists():
                     env_file = Path('../.env')
                 if env_file.exists():
                     load_dotenv(env_file)
-                    env_file_loaded = str(env_file.absolute())
-                    print(f"DEBUG: Loaded .env from {env_file_loaded}")
-                else:
-                    print(f"DEBUG: No .env file found at {Path('.env').absolute()} or {Path('../.env').absolute()}")
-            else:
-                print("DEBUG: python-dotenv not available")
 
             # Determine log level - priority: CLI args > ENV var > default
             cli_log_level = getattr(args, 'log_level', None)
-            system_log_level = os.getenv('SYSTEM_LOG_LEVEL')
-            log_level_env = os.getenv('LOG_LEVEL')
-
-            print(f"DEBUG: cli_log_level={cli_log_level}")
-            print(f"DEBUG: SYSTEM_LOG_LEVEL={system_log_level}")
-            print(f"DEBUG: LOG_LEVEL={log_level_env}")
-
             if cli_log_level:
                 log_level = cli_log_level
-                print(f"DEBUG: Using CLI log level: {log_level}")
             else:
                 # Check environment variable for LOG_LEVEL (try both SYSTEM_LOG_LEVEL and LOG_LEVEL)
-                env_log_level = system_log_level or log_level_env or 'INFO'
+                env_log_level = os.getenv('SYSTEM_LOG_LEVEL') or os.getenv('LOG_LEVEL', 'INFO')
                 env_log_level = env_log_level.upper()
                 log_level = env_log_level
-                print(f"DEBUG: Using ENV log level: {log_level}")
 
             browser_fallback = getattr(args, 'browser_fallback', True)
             simple_mode = getattr(args, 'simple_mode', False)
