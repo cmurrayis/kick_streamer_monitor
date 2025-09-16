@@ -113,6 +113,9 @@ class WebDashboardService:
             self.app.router.add_get('/api/dashboard/recent-activity', self._handle_api_recent_activity)
             self.app.router.add_get('/api/dashboard/system-health', self._handle_api_system_health)
             self.app.router.add_get('/api/dashboard/viewer-analytics', self._handle_api_viewer_analytics)
+
+            # Analytics graph API endpoints
+            self.app.router.add_get('/api/analytics/graph/{streamer_username}', self._handle_analytics_graph)
             
             # Start server
             self.runner = web.AppRunner(self.app)
@@ -2189,6 +2192,11 @@ class WebDashboardService:
                         <td class="humans-count">{humans_display}</td>
                         <td class="last-seen">{last_seen}</td>
                         <td class="last-update">{last_update}</td>
+                        <td class="actions">
+                            <button class="graph-btn" onclick="showGraph('{streamer.username}')" title="View Analytics Graph">
+                                📊 Graph
+                            </button>
+                        </td>
                     </tr>
                 '''
             
@@ -2205,6 +2213,7 @@ class WebDashboardService:
                         <th>Humans</th>
                         <th>Last Seen Online</th>
                         <th>Last Update</th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody id="streamers-tbody">
@@ -2224,6 +2233,7 @@ class WebDashboardService:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Dashboard - Kick Streamer Monitor</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {{
             font-family: 'Courier New', monospace;
@@ -2340,6 +2350,128 @@ class WebDashboardService:
             margin-top: 20px;
             color: #888888;
             font-size: 12px;
+        }}
+
+        /* Graph Modal Styles */
+        .graph-modal {{
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+        }}
+
+        .graph-modal-content {{
+            background-color: #0a0a0a;
+            margin: 2% auto;
+            padding: 20px;
+            border: 2px solid #00ff00;
+            width: 95%;
+            max-width: 1200px;
+            height: 90vh;
+            border-radius: 8px;
+            position: relative;
+        }}
+
+        .graph-modal-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 15px;
+        }}
+
+        .graph-modal-title {{
+            color: #00ff00;
+            font-size: 20px;
+            font-weight: bold;
+        }}
+
+        .graph-close {{
+            color: #ff6666;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }}
+
+        .graph-close:hover {{
+            color: #ff0000;
+        }}
+
+        .graph-controls {{
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }}
+
+        .period-btn {{
+            background: #333333;
+            color: #ffffff;
+            border: 1px solid #555555;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.3s;
+        }}
+
+        .period-btn.active {{
+            background: #00ff00;
+            color: #000000;
+            border-color: #00ff00;
+        }}
+
+        .period-btn:hover {{
+            background: #444444;
+        }}
+
+        .period-btn.active:hover {{
+            background: #00cc00;
+        }}
+
+        .nav-btn {{
+            background: #0066cc;
+            color: #ffffff;
+            border: 1px solid #0088ff;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.3s;
+        }}
+
+        .nav-btn:hover {{
+            background: #0088ff;
+        }}
+
+        .nav-btn:disabled {{
+            background: #333333;
+            color: #666666;
+            border-color: #333333;
+            cursor: not-allowed;
+        }}
+
+        .graph-container {{
+            height: calc(100% - 120px);
+            background: #111111;
+            border: 1px solid #333333;
+            border-radius: 4px;
+            padding: 10px;
+        }}
+
+        .loading-spinner {{
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 200px;
+            color: #00ff00;
+            font-size: 18px;
         }}
     </style>
 </head>
@@ -2562,7 +2694,213 @@ class WebDashboardService:
                 }}
             }}
         }}, 30000);
+
+        // Graph functionality
+        let currentStreamerUsername = '';
+        let currentPeriod = '1hr';
+        let currentOffset = 0;
+        let graphChart = null;
+
+        function showGraph(username) {{
+            currentStreamerUsername = username;
+            currentPeriod = '1hr';
+            currentOffset = 0;
+
+            document.getElementById('graph-modal').style.display = 'block';
+            document.getElementById('modal-streamer-name').textContent = username;
+
+            // Reset period buttons
+            document.querySelectorAll('.period-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelector('[data-period="1hr"]').classList.add('active');
+
+            loadGraph();
+        }}
+
+        function closeGraph() {{
+            document.getElementById('graph-modal').style.display = 'none';
+            if (graphChart) {{
+                graphChart.destroy();
+                graphChart = null;
+            }}
+        }}
+
+        function setPeriod(period) {{
+            currentPeriod = period;
+            currentOffset = 0;
+
+            // Update button states
+            document.querySelectorAll('.period-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelector(`[data-period="${{period}}"]`).classList.add('active');
+
+            loadGraph();
+        }}
+
+        function navigateGraph(direction) {{
+            currentOffset += direction;
+            if (currentOffset < 0) currentOffset = 0;
+            loadGraph();
+        }}
+
+        async function loadGraph() {{
+            const container = document.getElementById('graph-container');
+            container.innerHTML = '<div class="loading-spinner">Loading graph data...</div>';
+
+            try {{
+                const response = await fetch(`/api/analytics/graph/${{currentStreamerUsername}}?period=${{currentPeriod}}&offset=${{currentOffset}}`);
+                const data = await response.json();
+
+                if (data.error) {{
+                    container.innerHTML = `<div class="loading-spinner" style="color: #ff6666;">Error: ${{data.error}}</div>`;
+                    return;
+                }}
+
+                // Update navigation buttons
+                document.getElementById('prev-btn').disabled = currentOffset === 0;
+                document.getElementById('next-btn').disabled = !data.has_older_data;
+
+                // Destroy existing chart
+                if (graphChart) {{
+                    graphChart.destroy();
+                }}
+
+                // Create canvas for new chart
+                container.innerHTML = '<canvas id="analytics-chart"></canvas>';
+                const ctx = document.getElementById('analytics-chart').getContext('2d');
+
+                // Prepare chart data
+                const chartData = {{
+                    labels: data.data.map(point => new Date(point.recorded_at).toLocaleTimeString()),
+                    datasets: [
+                        {{
+                            label: 'Viewers',
+                            data: data.data.map(point => point.viewers),
+                            borderColor: '#00ff00',
+                            backgroundColor: 'rgba(0, 255, 0, 0.1)',
+                            tension: 0.1,
+                            yAxisID: 'y'
+                        }},
+                        {{
+                            label: 'Assigned Users',
+                            data: data.data.map(point => point.assigned),
+                            borderColor: '#00ccff',
+                            backgroundColor: 'rgba(0, 204, 255, 0.1)',
+                            tension: 0.1,
+                            yAxisID: 'y1'
+                        }}
+                    ]
+                }};
+
+                // Create chart
+                graphChart = new Chart(ctx, {{
+                    type: 'line',
+                    data: chartData,
+                    options: {{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {{
+                            title: {{
+                                display: true,
+                                text: `${{currentStreamerUsername}} - ${{currentPeriod.toUpperCase()}} Analytics (${{data.period_start}} to ${{data.period_end}})`,
+                                color: '#ffffff'
+                            }},
+                            legend: {{
+                                labels: {{
+                                    color: '#ffffff'
+                                }}
+                            }}
+                        }},
+                        scales: {{
+                            x: {{
+                                ticks: {{
+                                    color: '#ffffff'
+                                }},
+                                grid: {{
+                                    color: '#333333'
+                                }}
+                            }},
+                            y: {{
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
+                                title: {{
+                                    display: true,
+                                    text: 'Viewers',
+                                    color: '#00ff00'
+                                }},
+                                ticks: {{
+                                    color: '#00ff00'
+                                }},
+                                grid: {{
+                                    color: '#333333'
+                                }}
+                            }},
+                            y1: {{
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                title: {{
+                                    display: true,
+                                    text: 'Assigned Users',
+                                    color: '#00ccff'
+                                }},
+                                ticks: {{
+                                    color: '#00ccff'
+                                }},
+                                grid: {{
+                                    drawOnChartArea: false,
+                                    color: '#333333'
+                                }}
+                            }}
+                        }},
+                        elements: {{
+                            point: {{
+                                radius: 2,
+                                hoverRadius: 4
+                            }}
+                        }}
+                    }}
+                }});
+
+            }} catch (error) {{
+                console.error('Failed to load graph data:', error);
+                container.innerHTML = '<div class="loading-spinner" style="color: #ff6666;">Failed to load graph data</div>';
+            }}
+        }}
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {{
+            const modal = document.getElementById('graph-modal');
+            if (event.target === modal) {{
+                closeGraph();
+            }}
+        }}
     </script>
+
+    <!-- Graph Modal -->
+    <div id="graph-modal" class="graph-modal">
+        <div class="graph-modal-content">
+            <div class="graph-modal-header">
+                <div class="graph-modal-title">📊 Analytics Graph - <span id="modal-streamer-name"></span></div>
+                <span class="graph-close" onclick="closeGraph()">&times;</span>
+            </div>
+
+            <div class="graph-controls">
+                <button class="period-btn active" data-period="1hr" onclick="setPeriod('1hr')">1 Hour</button>
+                <button class="period-btn" data-period="6hr" onclick="setPeriod('6hr')">6 Hours</button>
+                <button class="period-btn" data-period="12hr" onclick="setPeriod('12hr')">12 Hours</button>
+
+                <div style="margin-left: auto; display: flex; gap: 10px;">
+                    <button id="next-btn" class="nav-btn" onclick="navigateGraph(1)">← Newer</button>
+                    <button id="prev-btn" class="nav-btn" onclick="navigateGraph(-1)">Older →</button>
+                </div>
+            </div>
+
+            <div id="graph-container" class="graph-container">
+                <div class="loading-spinner">Click a period to load graph data...</div>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>'''
 
@@ -2725,6 +3063,7 @@ class WebDashboardService:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Manage Streamers - Admin Panel</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {
             font-family: 'Courier New', monospace;
@@ -2847,6 +3186,128 @@ class WebDashboardService:
             border-color: #ff0000;
             color: #ff6666;
         }
+
+        /* Graph Modal Styles */
+        .graph-modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+        }
+
+        .graph-modal-content {
+            background-color: #0a0a0a;
+            margin: 2% auto;
+            padding: 20px;
+            border: 2px solid #ff6600;
+            width: 95%;
+            max-width: 1200px;
+            height: 90vh;
+            border-radius: 8px;
+            position: relative;
+        }
+
+        .graph-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 15px;
+        }
+
+        .graph-modal-title {
+            color: #ff6600;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .graph-close {
+            color: #ff6666;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .graph-close:hover {
+            color: #ff0000;
+        }
+
+        .graph-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .period-btn {
+            background: #333333;
+            color: #ffffff;
+            border: 1px solid #555555;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.3s;
+        }
+
+        .period-btn.active {
+            background: #ff6600;
+            color: #000000;
+            border-color: #ff6600;
+        }
+
+        .period-btn:hover {
+            background: #444444;
+        }
+
+        .period-btn.active:hover {
+            background: #cc5500;
+        }
+
+        .nav-btn {
+            background: #0066cc;
+            color: #ffffff;
+            border: 1px solid #0088ff;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.3s;
+        }
+
+        .nav-btn:hover {
+            background: #0088ff;
+        }
+
+        .nav-btn:disabled {
+            background: #333333;
+            color: #666666;
+            border-color: #333333;
+            cursor: not-allowed;
+        }
+
+        .graph-container {
+            height: calc(100% - 120px);
+            background: #111111;
+            border: 1px solid #333333;
+            border-radius: 4px;
+            padding: 10px;
+        }
+
+        .loading-spinner {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 200px;
+            color: #ff6600;
+            font-size: 18px;
+        }
     </style>
 </head>
 <body>
@@ -2958,11 +3419,12 @@ class WebDashboardService:
                             <td>${lastSeen}</td>
                             <td>${lastUpdate}</td>
                             <td>
+                                <button class="action-btn" onclick="showGraph('${streamer.username}')" title="View analytics graph">📊 GRAPH</button>
                                 <form method="post" action="/admin/streamers/refresh" style="display: inline;">
                                     <input type="hidden" name="streamer_id" value="${streamer.id}">
                                     <button type="submit" class="action-btn" title="Refresh profile data from Kick.com">REFRESH</button>
                                 </form>
-                                <form method="post" action="/admin/streamers/remove" style="display: inline;" 
+                                <form method="post" action="/admin/streamers/remove" style="display: inline;"
                                       onsubmit="return confirm('Are you sure you want to remove ${streamer.username}?')">
                                     <input type="hidden" name="streamer_id" value="${streamer.id}">
                                     <button type="submit" class="action-btn">REMOVE</button>
@@ -2977,7 +3439,213 @@ class WebDashboardService:
                 document.getElementById('streamers-tbody').innerHTML =
                     '<tr><td colspan="11" style="text-align: center; color: #ff6666;">Failed to load streamers</td></tr>';
             });
+
+        // Graph functionality
+        let currentStreamerUsername = '';
+        let currentPeriod = '1hr';
+        let currentOffset = 0;
+        let graphChart = null;
+
+        function showGraph(username) {
+            currentStreamerUsername = username;
+            currentPeriod = '1hr';
+            currentOffset = 0;
+
+            document.getElementById('graph-modal').style.display = 'block';
+            document.getElementById('modal-streamer-name').textContent = username;
+
+            // Reset period buttons
+            document.querySelectorAll('.period-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelector('[data-period="1hr"]').classList.add('active');
+
+            loadGraph();
+        }
+
+        function closeGraph() {
+            document.getElementById('graph-modal').style.display = 'none';
+            if (graphChart) {
+                graphChart.destroy();
+                graphChart = null;
+            }
+        }
+
+        function setPeriod(period) {
+            currentPeriod = period;
+            currentOffset = 0;
+
+            // Update button states
+            document.querySelectorAll('.period-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelector(`[data-period="${period}"]`).classList.add('active');
+
+            loadGraph();
+        }
+
+        function navigateGraph(direction) {
+            currentOffset += direction;
+            if (currentOffset < 0) currentOffset = 0;
+            loadGraph();
+        }
+
+        async function loadGraph() {
+            const container = document.getElementById('graph-container');
+            container.innerHTML = '<div class="loading-spinner">Loading graph data...</div>';
+
+            try {
+                const response = await fetch(`/api/analytics/graph/${currentStreamerUsername}?period=${currentPeriod}&offset=${currentOffset}`);
+                const data = await response.json();
+
+                if (data.error) {
+                    container.innerHTML = `<div class="loading-spinner" style="color: #ff6666;">Error: ${data.error}</div>`;
+                    return;
+                }
+
+                // Update navigation buttons
+                document.getElementById('prev-btn').disabled = currentOffset === 0;
+                document.getElementById('next-btn').disabled = !data.has_older_data;
+
+                // Destroy existing chart
+                if (graphChart) {
+                    graphChart.destroy();
+                }
+
+                // Create canvas for new chart
+                container.innerHTML = '<canvas id="analytics-chart"></canvas>';
+                const ctx = document.getElementById('analytics-chart').getContext('2d');
+
+                // Prepare chart data
+                const chartData = {
+                    labels: data.data.map(point => new Date(point.recorded_at).toLocaleTimeString()),
+                    datasets: [
+                        {
+                            label: 'Viewers',
+                            data: data.data.map(point => point.viewers),
+                            borderColor: '#ff6600',
+                            backgroundColor: 'rgba(255, 102, 0, 0.1)',
+                            tension: 0.1,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Assigned Users',
+                            data: data.data.map(point => point.assigned),
+                            borderColor: '#00ccff',
+                            backgroundColor: 'rgba(0, 204, 255, 0.1)',
+                            tension: 0.1,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                };
+
+                // Create chart
+                graphChart = new Chart(ctx, {
+                    type: 'line',
+                    data: chartData,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: `${currentStreamerUsername} - ${currentPeriod.toUpperCase()} Analytics (${data.period_start} to ${data.period_end})`,
+                                color: '#ffffff'
+                            },
+                            legend: {
+                                labels: {
+                                    color: '#ffffff'
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: {
+                                    color: '#ffffff'
+                                },
+                                grid: {
+                                    color: '#333333'
+                                }
+                            },
+                            y: {
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
+                                title: {
+                                    display: true,
+                                    text: 'Viewers',
+                                    color: '#ff6600'
+                                },
+                                ticks: {
+                                    color: '#ff6600'
+                                },
+                                grid: {
+                                    color: '#333333'
+                                }
+                            },
+                            y1: {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                title: {
+                                    display: true,
+                                    text: 'Assigned Users',
+                                    color: '#00ccff'
+                                },
+                                ticks: {
+                                    color: '#00ccff'
+                                },
+                                grid: {
+                                    drawOnChartArea: false,
+                                    color: '#333333'
+                                }
+                            }
+                        },
+                        elements: {
+                            point: {
+                                radius: 2,
+                                hoverRadius: 4
+                            }
+                        }
+                    }
+                });
+
+            } catch (error) {
+                console.error('Failed to load graph data:', error);
+                container.innerHTML = '<div class="loading-spinner" style="color: #ff6666;">Failed to load graph data</div>';
+            }
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('graph-modal');
+            if (event.target === modal) {
+                closeGraph();
+            }
+        }
     </script>
+
+    <!-- Graph Modal -->
+    <div id="graph-modal" class="graph-modal">
+        <div class="graph-modal-content">
+            <div class="graph-modal-header">
+                <div class="graph-modal-title">📊 Analytics Graph - <span id="modal-streamer-name"></span></div>
+                <span class="graph-close" onclick="closeGraph()">&times;</span>
+            </div>
+
+            <div class="graph-controls">
+                <button class="period-btn active" data-period="1hr" onclick="setPeriod('1hr')">1 Hour</button>
+                <button class="period-btn" data-period="6hr" onclick="setPeriod('6hr')">6 Hours</button>
+                <button class="period-btn" data-period="12hr" onclick="setPeriod('12hr')">12 Hours</button>
+
+                <div style="margin-left: auto; display: flex; gap: 10px;">
+                    <button id="next-btn" class="nav-btn" onclick="navigateGraph(1)">← Newer</button>
+                    <button id="prev-btn" class="nav-btn" onclick="navigateGraph(-1)">Older →</button>
+                </div>
+            </div>
+
+            <div id="graph-container" class="graph-container">
+                <div class="loading-spinner">Click a period to load graph data...</div>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>'''
 
@@ -4342,6 +5010,107 @@ class WebDashboardService:
     </script>
 </body>
 </html>'''
+
+    async def _handle_analytics_graph(self, request: Request) -> Response:
+        """API endpoint for analytics graph data."""
+        try:
+            # Get streamer username from URL path
+            streamer_username = request.match_info.get('streamer_username')
+            if not streamer_username:
+                return Response(status=400, text="Missing streamer username")
+
+            # Get query parameters for time period and navigation
+            query_params = request.query
+            period = query_params.get('period', '1hr')  # Default to 1 hour
+            offset = int(query_params.get('offset', '0'))  # Default to current period (0 = current, 1 = previous, -1 = next)
+
+            # Calculate time range based on period and offset
+            from datetime import timedelta
+            now = datetime.now(timezone.utc)
+
+            if period == '1hr':
+                duration = timedelta(hours=1)
+            elif period == '6hr':
+                duration = timedelta(hours=6)
+            elif period == '12hr':
+                duration = timedelta(hours=12)
+            else:
+                return Response(status=400, text="Invalid period. Use 1hr, 6hr, or 12hr")
+
+            # Calculate start and end times based on offset
+            end_time = now - (duration * offset)
+            start_time = end_time - duration
+
+            # Get streamer ID from username
+            streamer = await self.database_service.get_streamer_by_username(streamer_username)
+            if not streamer:
+                return Response(status=404, text="Streamer not found")
+
+            # Query analytics data from database
+            async with self.database_service.transaction() as conn:
+                analytics_data = await conn.fetch("""
+                    SELECT recorded_at, viewers, running, assigned, status
+                    FROM streamer_analytics
+                    WHERE streamer_id = $1
+                      AND recorded_at >= $2
+                      AND recorded_at <= $3
+                    ORDER BY recorded_at ASC
+                """, streamer.id, start_time, end_time)
+
+            # Format data for Chart.js
+            labels = []
+            viewer_data = []
+            running_data = []
+            assigned_data = []
+
+            for row in analytics_data:
+                # Format timestamp for chart labels
+                timestamp = row['recorded_at']
+                if period == '1hr':
+                    label = timestamp.strftime('%H:%M')
+                else:
+                    label = timestamp.strftime('%m/%d %H:%M')
+
+                labels.append(label)
+                viewer_data.append(row['viewers'])
+                running_data.append(1 if row['running'] else 0)
+                assigned_data.append(row['assigned'])
+
+            # Calculate navigation info
+            has_previous = True  # Always allow going back in time
+            has_next = offset > 0  # Only allow going forward if we're not at current period
+
+            response_data = {
+                'streamer': streamer_username,
+                'period': period,
+                'offset': offset,
+                'start_time': start_time.isoformat(),
+                'end_time': end_time.isoformat(),
+                'labels': labels,
+                'datasets': {
+                    'viewers': viewer_data,
+                    'running': running_data,
+                    'assigned': assigned_data
+                },
+                'navigation': {
+                    'has_previous': has_previous,
+                    'has_next': has_next,
+                    'previous_offset': offset + 1,
+                    'next_offset': offset - 1 if offset > 0 else 0
+                },
+                'stats': {
+                    'total_points': len(analytics_data),
+                    'max_viewers': max(viewer_data) if viewer_data else 0,
+                    'avg_viewers': sum(viewer_data) // len(viewer_data) if viewer_data else 0,
+                    'online_percentage': (sum(running_data) / len(running_data) * 100) if running_data else 0
+                }
+            }
+
+            return Response(text=json.dumps(response_data, default=str), content_type='application/json')
+
+        except Exception as e:
+            logger.error(f"Error in analytics graph API: {e}")
+            return Response(status=500, text=f"Internal server error: {str(e)}")
 
     @property
     def is_running(self) -> bool:
