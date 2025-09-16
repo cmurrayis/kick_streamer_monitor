@@ -32,7 +32,7 @@ async def test_user_dashboard_logic():
     db_config = DatabaseConfig(
         host=os.getenv('DATABASE_HOST', 'localhost'),
         port=int(os.getenv('DATABASE_PORT', 5432)),
-        user=os.getenv('DATABASE_USER'),
+        username=os.getenv('DATABASE_USER'),
         password=os.getenv('DATABASE_PASSWORD'),
         database=os.getenv('DATABASE_NAME', 'kick_monitor')
     )
