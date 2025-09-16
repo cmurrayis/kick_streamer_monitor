@@ -2456,6 +2456,7 @@ class WebDashboardService:
             streamers.forEach(streamer => {{
                 const row = document.querySelector(`tr[data-streamer-id="${{streamer.id}}"]`);
                 if (row) {{
+                    const profileCell = row.querySelector('.profile-pic-column');
                     const statusCell = row.querySelector('.streamer-status');
                     const viewerCell = row.querySelector('.viewer-count');
                     const runningCell = row.querySelector('.running-count');
@@ -2463,6 +2464,15 @@ class WebDashboardService:
                     const humansCell = row.querySelector('.humans-count');
                     const lastSeenCell = row.querySelector('.last-seen');
                     const lastUpdateCell = row.querySelector('.last-update');
+
+                    // Update profile picture
+                    if (profileCell && streamer.profile_picture_url) {{
+                        const profileImg = `<img src="${{streamer.profile_picture_url}}" alt="${{streamer.username}}" style="width: 48px; height: 48px; border-radius: 50%; border: 2px solid #00ff00; object-fit: cover; display: block; margin: 0 auto;">`;
+                        profileCell.innerHTML = profileImg;
+                    }} else if (profileCell) {{
+                        const placeholder = `<div style="width: 48px; height: 48px; border-radius: 50%; border: 2px solid #00ff00; background: #003300; display: flex; align-items: center; justify-content: center; color: #00ff00; font-size: 16px; margin: 0 auto;">${{streamer.username[0].toUpperCase()}}</div>`;
+                        profileCell.innerHTML = placeholder;
+                    }}
 
                     // Check if status changed
                     const currentStatus = statusCell.textContent.toLowerCase();
