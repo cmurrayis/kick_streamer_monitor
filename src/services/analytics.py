@@ -180,43 +180,60 @@ class AnalyticsService:
             logger.debug("No active streamers found for analytics collection")
             return
 
-        logger.debug(f"Collecting analytics for {len(streamers)} streamers")
-
-        # Collect data for each streamer
+        # Collect data for each streamer - ALWAYS record something for each streamer
         analytics_data = []
         recorded_at = datetime.now(timezone.utc).replace(second=0, microsecond=0)  # Round to minute
 
+        logger.info(f"Collecting analytics for {len(streamers)} streamers at {recorded_at}")
+
         for streamer in streamers:
             try:
+                # This method now always returns data (never None)
                 data = await self._collect_streamer_data(streamer, recorded_at)
-                if data:
-                    analytics_data.append(data)
+                analytics_data.append(data)
 
-                    # Update session tracking
-                    await self._update_session_tracking(streamer, data)
+                # Update session tracking
+                await self._update_session_tracking(streamer, data)
 
             except Exception as e:
                 logger.error(f"Failed to collect data for streamer {streamer.username}: {e}")
-                continue
+                # Even if session tracking fails, still record offline data point for continuity
+                fallback_data = StreamerAnalyticsData(
+                    streamer_id=streamer.id,
+                    username=streamer.username,
+                    viewers=0,
+                    running=False,
+                    assigned=0,  # Default to 0 if we can't get the count
+                    status='offline',
+                    recorded_at=recorded_at
+                )
+                analytics_data.append(fallback_data)
 
         # Batch insert analytics data
         if analytics_data:
             await self._store_analytics_data(analytics_data)
+            logger.info(f"Stored analytics data for {len(analytics_data)} streamers")
+        else:
+            logger.warning("No analytics data to store - this shouldn't happen!")
 
-    async def _collect_streamer_data(self, streamer: Streamer, recorded_at: datetime) -> Optional[StreamerAnalyticsData]:
+    async def _collect_streamer_data(self, streamer: Streamer, recorded_at: datetime) -> StreamerAnalyticsData:
         """Collect analytics data for a single streamer."""
+        # Always get assigned user count regardless of API success/failure
+        assigned_count = await self._get_assigned_user_count(streamer.id)
+
         try:
             # Get current stream info from API
             stream_info = await self.oauth_service.get_channel_info(streamer.username)
 
             if not stream_info:
-                # Streamer is offline or API failed
+                # Streamer is offline or API failed - still record the data point
+                logger.debug(f"No stream info for {streamer.username} - recording as offline")
                 return StreamerAnalyticsData(
                     streamer_id=streamer.id,
                     username=streamer.username,
                     viewers=0,
                     running=False,
-                    assigned=await self._get_assigned_user_count(streamer.id),
+                    assigned=assigned_count,
                     status='offline',
                     recorded_at=recorded_at
                 )
@@ -225,19 +242,29 @@ class AnalyticsService:
             viewers = stream_info.get('viewers', 0)
             is_live = stream_info.get('is_live', False)
 
+            logger.debug(f"Collected data for {streamer.username}: viewers={viewers}, live={is_live}")
             return StreamerAnalyticsData(
                 streamer_id=streamer.id,
                 username=streamer.username,
                 viewers=viewers,
                 running=is_live,
-                assigned=await self._get_assigned_user_count(streamer.id),
+                assigned=assigned_count,
                 status='online' if is_live else 'offline',
                 recorded_at=recorded_at
             )
 
         except Exception as e:
-            logger.error(f"Failed to collect data for {streamer.username}: {e}")
-            return None
+            # Even if API fails, we still want to record a data point for continuity
+            logger.warning(f"API failed for {streamer.username}, recording as offline: {e}")
+            return StreamerAnalyticsData(
+                streamer_id=streamer.id,
+                username=streamer.username,
+                viewers=0,
+                running=False,
+                assigned=assigned_count,
+                status='offline',
+                recorded_at=recorded_at
+            )
 
     async def _get_assigned_user_count(self, streamer_id: int) -> int:
         """Get number of users assigned to this streamer."""
