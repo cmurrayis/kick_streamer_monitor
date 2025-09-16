@@ -278,7 +278,17 @@ class SimpleMonitorService:
                 )
 
                 await self.database_service.create_status_event(event_create)
-                
+
+                # Log analytics data for worker assignments if available
+                try:
+                    if viewer_count is not None:
+                        assigned_viewers = await self.database_service.snags_service.get_assigned_viewers_for_streamer(streamer.username)
+                        humans = max(0, viewer_count - assigned_viewers)
+
+                        await self._log_worker_analytics(streamer.id, viewer_count, assigned_viewers, humans)
+                except Exception as e:
+                    logger.debug(f"Could not log worker analytics for {streamer.username}: {e}")
+
                 logger.info(f"Updated {streamer.username}: {streamer.status.value} -> {new_status}")
         
         except Exception as e:
@@ -295,8 +305,16 @@ class SimpleMonitorService:
 
                 # Create a viewer tracking event for analytics without status validation
                 # This ensures we have historical viewer data even when status doesn't change
-                from datetime import datetime, timezone
                 await self._create_viewer_tracking_event(streamer, viewer_count, livestream_id)
+
+                # Log worker analytics even when status doesn't change
+                try:
+                    assigned_viewers = await self.database_service.snags_service.get_assigned_viewers_for_streamer(streamer.username)
+                    humans = max(0, viewer_count - assigned_viewers)
+                    await self._log_worker_analytics(streamer.id, viewer_count, assigned_viewers, humans)
+                except Exception as e:
+                    logger.debug(f"Could not log worker analytics for {streamer.username} viewer update: {e}")
+
                 logger.debug(f"Updated viewer count for {streamer.username}: {viewer_count}")
 
         except Exception as e:
@@ -375,6 +393,80 @@ class SimpleMonitorService:
             logger.debug(f"Would update playback URL for {streamer.username}: {playback_url}")
         except Exception as e:
             logger.error(f"Error updating playback URL for {streamer.username}: {e}")
+
+    async def _log_worker_analytics(self, streamer_id: int, current_viewers: int, assigned_viewers: int, humans: int):
+        """Log worker assignment analytics data for historical analysis."""
+        try:
+            async with self.database_service.get_connection() as conn:
+                query = """
+                INSERT INTO worker_analytics (
+                    streamer_id, timestamp, current_viewers, assigned_viewers, humans, logged_at
+                ) VALUES ($1, $2, $3, $4, $5, $6)
+                ON CONFLICT DO NOTHING
+                """
+
+                now = datetime.now(timezone.utc)
+                await conn.execute(
+                    query,
+                    streamer_id,
+                    now,
+                    current_viewers,
+                    assigned_viewers,
+                    humans,
+                    now
+                )
+
+                logger.debug(f"Logged worker analytics for streamer {streamer_id}: viewers={current_viewers}, assigned={assigned_viewers}, humans={humans}")
+
+        except Exception as e:
+            # Don't fail the main process if analytics logging fails
+            logger.debug(f"Could not log worker analytics: {e}")
+            # Check if table exists, create if needed
+            try:
+                await self._ensure_analytics_table_exists()
+                # Retry once
+                async with self.database_service.get_connection() as conn:
+                    await conn.execute(
+                        query,
+                        streamer_id,
+                        now,
+                        current_viewers,
+                        assigned_viewers,
+                        humans,
+                        now
+                    )
+            except Exception as retry_error:
+                logger.debug(f"Retry failed for worker analytics logging: {retry_error}")
+
+    async def _ensure_analytics_table_exists(self):
+        """Ensure the worker_analytics table exists for logging."""
+        try:
+            async with self.database_service.get_connection() as conn:
+                create_table_query = """
+                CREATE TABLE IF NOT EXISTS worker_analytics (
+                    id SERIAL PRIMARY KEY,
+                    streamer_id INTEGER NOT NULL REFERENCES streamer(id) ON DELETE CASCADE,
+                    timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+                    current_viewers INTEGER NOT NULL DEFAULT 0,
+                    assigned_viewers INTEGER NOT NULL DEFAULT 0,
+                    humans INTEGER NOT NULL DEFAULT 0,
+                    logged_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                    UNIQUE(streamer_id, timestamp)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_worker_analytics_streamer_time
+                ON worker_analytics(streamer_id, timestamp DESC);
+
+                CREATE INDEX IF NOT EXISTS idx_worker_analytics_timestamp
+                ON worker_analytics(timestamp DESC);
+                """
+
+                await conn.execute(create_table_query)
+                logger.info("Worker analytics table created successfully")
+
+        except Exception as e:
+            logger.error(f"Failed to create worker analytics table: {e}")
+            raise
     
     def get_stats(self) -> Dict[str, Any]:
         """Get monitoring statistics."""
@@ -433,11 +525,43 @@ class SimpleMonitorService:
             }
         }
     
-    def get_streamer_details(self) -> List[Dict[str, Any]]:
-        """Get detailed information about all monitored streamers."""
+    async def get_streamer_details(self) -> List[Dict[str, Any]]:
+        """Get detailed information about all monitored streamers with assigned viewer data."""
         try:
+            # Get streamers with assigned viewer counts from database
+            streamers_with_assigned = await self.database_service.get_active_streamers_with_assigned_viewers()
+
+            if not streamers_with_assigned:
+                return []
+
             result = []
-            
+            for streamer_data in streamers_with_assigned:
+                result.append({
+                    "id": streamer_data["id"],
+                    "username": streamer_data["username"],
+                    "kick_user_id": streamer_data["kick_user_id"],
+                    "display_name": streamer_data["display_name"],
+                    "status": streamer_data["status"],
+                    "last_seen_online": streamer_data["last_seen_online"].isoformat() if streamer_data.get("last_seen_online") else None,
+                    "last_status_update": streamer_data["last_status_update"].isoformat() if streamer_data.get("last_status_update") else None,
+                    "current_viewers": streamer_data.get("current_viewers"),
+                    "peak_viewers": streamer_data.get("peak_viewers"),
+                    "avg_viewers": streamer_data.get("avg_viewers"),
+                    "assigned_viewers": streamer_data.get("assigned_viewers", 0),  # New field
+                    "humans": streamer_data.get("humans", 0),  # New field
+                    "profile_picture_url": streamer_data.get("profile_picture_url"),
+                    "is_subscribed": False,  # Simple mode doesn't use subscriptions
+                    "subscription_time": None,
+                    "consecutive_failures": 0,  # Simple mode doesn't track this
+                    "last_event_timestamp": streamer_data["last_status_update"].isoformat() if streamer_data.get("last_status_update") else None,
+                    "pending_events_count": 0
+                })
+
+            return sorted(result, key=lambda x: x["username"])
+        except Exception as e:
+            logger.error(f"Error getting streamer details: {e}")
+            # Fallback to cached data without assigned viewers
+            result = []
             for streamer in self._cached_streamers:
                 result.append({
                     "id": streamer.id,
@@ -450,17 +574,16 @@ class SimpleMonitorService:
                     "current_viewers": getattr(streamer, 'current_viewers', None),
                     "peak_viewers": getattr(streamer, 'peak_viewers', None),
                     "avg_viewers": getattr(streamer, 'avg_viewers', None),
-                    "is_subscribed": False,  # Simple mode doesn't use subscriptions
+                    "assigned_viewers": 0,  # Default to 0 on error
+                    "humans": getattr(streamer, 'current_viewers', None) or 0,  # Fallback to current viewers
+                    "profile_picture_url": getattr(streamer, 'profile_picture_url', None),
+                    "is_subscribed": False,
                     "subscription_time": None,
-                    "consecutive_failures": 0,  # Simple mode doesn't track this
+                    "consecutive_failures": 0,
                     "last_event_timestamp": streamer.last_status_update.isoformat() if streamer.last_status_update else None,
                     "pending_events_count": 0
                 })
-            
             return sorted(result, key=lambda x: x["username"])
-        except Exception as e:
-            logger.error(f"Error getting streamer details: {e}")
-            return []
     
     @property
     def is_running(self) -> bool:

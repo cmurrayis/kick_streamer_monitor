@@ -205,10 +205,10 @@ class WebDashboardService:
         """API endpoint for streamer details."""
         try:
             if hasattr(self.monitor_service, 'get_streamer_details'):
-                streamers = self.monitor_service.get_streamer_details()
+                streamers = await self.monitor_service.get_streamer_details()
             else:
                 streamers = []
-            
+
             return Response(
                 text=json.dumps(streamers, default=str),
                 content_type='application/json'
@@ -749,7 +749,7 @@ class WebDashboardService:
                         stats = self.monitor_service.get_stats()
                     
                     if hasattr(self.monitor_service, 'get_streamer_details'):
-                        streamers = self.monitor_service.get_streamer_details()
+                        streamers = await self.monitor_service.get_streamer_details()
                     else:
                         streamers = []
                     
@@ -1295,19 +1295,26 @@ class WebDashboardService:
             return Response(status=500, text="Database service unavailable")
 
         try:
-            streamers = await self.database_service.get_all_streamers()
+            # Use the new method that includes assigned viewers data
+            streamers_with_assigned = await self.database_service.get_active_streamers_with_assigned_viewers()
+
             streamers_data = []
-            for streamer in streamers:
+            for streamer_data in streamers_with_assigned:
                 streamers_data.append({
-                    'id': streamer.id,
-                    'username': streamer.username,
-                    'status': streamer.status.value,
-                    'display_name': streamer.display_name,
-                    'last_seen_online': streamer.last_seen_online.isoformat() if streamer.last_seen_online else None,
-                    'last_status_update': streamer.last_status_update.isoformat() if streamer.last_status_update else None,
-                    'is_active': streamer.is_active
+                    'id': streamer_data['id'],
+                    'username': streamer_data['username'],
+                    'status': streamer_data['status'],
+                    'display_name': streamer_data['display_name'],
+                    'last_seen_online': streamer_data['last_seen_online'].isoformat() if streamer_data.get('last_seen_online') else None,
+                    'last_status_update': streamer_data['last_status_update'].isoformat() if streamer_data.get('last_status_update') else None,
+                    'is_active': streamer_data.get('is_active', True),
+                    'current_viewers': streamer_data.get('current_viewers'),
+                    'assigned_viewers': streamer_data.get('assigned_viewers', 0),
+                    'humans': streamer_data.get('humans', 0),
+                    'profile_picture_url': streamer_data.get('profile_picture_url')
                 })
-            return Response(text=json.dumps(streamers_data), content_type='application/json')
+
+            return Response(text=json.dumps(streamers_data, default=str), content_type='application/json')
         except Exception as e:
             logger.error(f"Error fetching streamers API: {e}")
             return Response(status=500, text="Internal server error")
@@ -2044,6 +2051,8 @@ class WebDashboardService:
                         <th>Streamer</th>
                         <th>Status</th>
                         <th>Viewers</th>
+                        <th>Assigned</th>
+                        <th>Humans</th>
                         <th>Last Seen Online</th>
                         <th>Last Update</th>
                     </tr>
@@ -2295,6 +2304,8 @@ class WebDashboardService:
                 if (row) {{
                     const statusCell = row.querySelector('.streamer-status');
                     const viewerCell = row.querySelector('.viewer-count');
+                    const assignedCell = row.querySelector('.assigned-count');
+                    const humansCell = row.querySelector('.humans-count');
                     const lastSeenCell = row.querySelector('.last-seen');
                     const lastUpdateCell = row.querySelector('.last-update');
 
@@ -2325,6 +2336,20 @@ class WebDashboardService:
                         }}
                     }}
                     viewerCell.textContent = viewerDisplay;
+
+                    // Update assigned viewers
+                    let assignedDisplay = "-";
+                    if (streamer.assigned_viewers !== undefined && streamer.assigned_viewers !== null) {{
+                        assignedDisplay = streamer.assigned_viewers.toLocaleString();
+                    }}
+                    if (assignedCell) assignedCell.textContent = assignedDisplay;
+
+                    // Update humans count
+                    let humansDisplay = "-";
+                    if (streamer.humans !== undefined && streamer.humans !== null) {{
+                        humansDisplay = streamer.humans.toLocaleString();
+                    }}
+                    if (humansCell) humansCell.textContent = humansDisplay;
 
                     // Update timestamps
                     const lastSeen = streamer.last_seen_online ?
@@ -2675,13 +2700,16 @@ class WebDashboardService:
                     <th class="profile-pic-column">Profile</th>
                     <th>Username</th>
                     <th>Status</th>
+                    <th>Viewers</th>
+                    <th>Assigned</th>
+                    <th>Humans</th>
                     <th>Last Seen Online</th>
                     <th>Last Update</th>
                     <th>Actions</th>
                 </tr>
             </thead>
             <tbody id="streamers-tbody">
-                <tr><td colspan="7" style="text-align: center;">Loading streamers...</td></tr>
+                <tr><td colspan="10" style="text-align: center;">Loading streamers...</td></tr>
             </tbody>
         </table>
     </div>
@@ -2722,7 +2750,7 @@ class WebDashboardService:
                 const tbody = document.getElementById('streamers-tbody');
                 
                 if (!streamers || streamers.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No streamers found</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="10" style="text-align: center;">No streamers found</td></tr>';
                     return;
                 }
                 
@@ -2743,6 +2771,9 @@ class WebDashboardService:
                             <td class="profile-pic-column">${profilePicture}</td>
                             <td>${streamer.username}</td>
                             <td class="${statusClass}">${streamer.status.toUpperCase()}</td>
+                            <td>${streamer.current_viewers !== undefined && streamer.current_viewers !== null ? streamer.current_viewers.toLocaleString() : '-'}</td>
+                            <td>${streamer.assigned_viewers !== undefined && streamer.assigned_viewers !== null ? streamer.assigned_viewers.toLocaleString() : '-'}</td>
+                            <td>${streamer.humans !== undefined && streamer.humans !== null ? streamer.humans.toLocaleString() : '-'}</td>
                             <td>${lastSeen}</td>
                             <td>${lastUpdate}</td>
                             <td>
@@ -2762,8 +2793,8 @@ class WebDashboardService:
             })
             .catch(error => {
                 console.error('Failed to load streamers:', error);
-                document.getElementById('streamers-tbody').innerHTML = 
-                    '<tr><td colspan="6" style="text-align: center; color: #ff6666;">Failed to load streamers</td></tr>';
+                document.getElementById('streamers-tbody').innerHTML =
+                    '<tr><td colspan="10" style="text-align: center; color: #ff6666;">Failed to load streamers</td></tr>';
             });
     </script>
 </body>

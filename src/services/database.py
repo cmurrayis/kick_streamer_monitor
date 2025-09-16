@@ -26,6 +26,7 @@ from models.user import (
     User, UserCreate, UserUpdate, UserRole, UserStatus,
     UserStreamerAssignment, UserStreamerAssignmentCreate
 )
+from .snags_database import SnagsDatabaseService
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +101,9 @@ class DatabaseService:
         self.config = config
         self.pool: Optional[Pool] = None
         self._is_connected = False
+
+        # Initialize snags database service for worker assignments
+        self.snags_service = SnagsDatabaseService()
         
     async def connect(self) -> None:
         """Initialize database connection pool."""
@@ -125,7 +129,15 @@ class DatabaseService:
             
             self._is_connected = True
             logger.info(f"Database connection pool created ({self.config.min_connections}-{self.config.max_connections} connections)")
-            
+
+            # Connect to snags database for worker assignments
+            try:
+                await self.snags_service.connect()
+                logger.info("Successfully connected to snags database")
+            except Exception as e:
+                logger.warning(f"Failed to connect to snags database (worker assignments will be unavailable): {e}")
+                # Don't fail the main connection if snags is unavailable
+
         except Exception as e:
             logger.error(f"Failed to connect to database: {e}")
             raise ConnectionError(f"Database connection failed: {e}") from e
@@ -136,6 +148,13 @@ class DatabaseService:
             return
         
         try:
+            # Close snags database connection first
+            try:
+                await self.snags_service.disconnect()
+                logger.info("Snags database connection closed")
+            except Exception as e:
+                logger.warning(f"Error closing snags database connection: {e}")
+
             logger.info("Closing database connection pool")
             await self.pool.close()
             self._is_connected = False
@@ -299,7 +318,41 @@ class DatabaseService:
             
             records = await conn.fetch(query)
             return [Streamer(**dict(record)) for record in records]
-    
+
+    async def get_active_streamers_with_assigned_viewers(self) -> List[Dict[str, Any]]:
+        """
+        Get all active streamers with their assigned viewer counts from snags database.
+
+        Returns:
+            List of dictionaries containing streamer data plus assigned_viewers and humans counts
+        """
+        # Get basic streamer data
+        streamers = await self.get_active_streamers()
+
+        if not streamers:
+            return []
+
+        # Get assigned viewers from snags database
+        usernames = [s.username for s in streamers]
+        assigned_viewers_map = await self.snags_service.get_assigned_viewers_for_multiple_streamers(usernames)
+
+        # Combine data
+        result = []
+        for streamer in streamers:
+            assigned_viewers = assigned_viewers_map.get(streamer.username, 0)
+            current_viewers = getattr(streamer, 'current_viewers', None) or 0
+            humans = max(0, current_viewers - assigned_viewers)  # Can't be negative
+
+            streamer_data = streamer.dict()
+            streamer_data.update({
+                'assigned_viewers': assigned_viewers,
+                'humans': humans
+            })
+
+            result.append(streamer_data)
+
+        return result
+
     async def update_streamer(self, streamer_id: int, update: StreamerUpdate) -> Optional[Streamer]:
         """Update streamer record."""
         update_fields = []
@@ -1370,3 +1423,122 @@ class DatabaseService:
 
             records = await conn.fetch(query)
             return [dict(record) for record in records]
+
+    async def get_worker_analytics_summary(self, hours: int = 24) -> Dict[str, Any]:
+        """
+        Get worker analytics summary for the last N hours.
+
+        Args:
+            hours: Number of hours to look back
+
+        Returns:
+            Summary statistics including totals, averages, and trends
+        """
+        try:
+            async with self.get_connection() as conn:
+                # Get summary statistics
+                summary_query = """
+                SELECT
+                    COUNT(*) as total_records,
+                    COUNT(DISTINCT streamer_id) as unique_streamers,
+                    SUM(current_viewers) as total_current_viewers,
+                    SUM(assigned_viewers) as total_assigned_viewers,
+                    SUM(humans) as total_humans,
+                    AVG(current_viewers) as avg_current_viewers,
+                    AVG(assigned_viewers) as avg_assigned_viewers,
+                    AVG(humans) as avg_humans,
+                    MIN(timestamp) as earliest_record,
+                    MAX(timestamp) as latest_record
+                FROM worker_analytics
+                WHERE timestamp >= NOW() - INTERVAL '%s hours'
+                """ % hours
+
+                summary = await conn.fetchrow(summary_query)
+
+                # Get top streamers by assigned viewers
+                top_assigned_query = """
+                SELECT
+                    s.username,
+                    s.display_name,
+                    AVG(wa.current_viewers) as avg_viewers,
+                    AVG(wa.assigned_viewers) as avg_assigned,
+                    AVG(wa.humans) as avg_humans,
+                    COUNT(*) as data_points
+                FROM worker_analytics wa
+                JOIN streamer s ON wa.streamer_id = s.id
+                WHERE wa.timestamp >= NOW() - INTERVAL '%s hours'
+                GROUP BY s.id, s.username, s.display_name
+                HAVING AVG(wa.assigned_viewers) > 0
+                ORDER BY AVG(wa.assigned_viewers) DESC
+                LIMIT 10
+                """ % hours
+
+                top_assigned = await conn.fetch(top_assigned_query)
+
+                # Get hourly trends
+                trends_query = """
+                SELECT
+                    DATE_TRUNC('hour', timestamp) as hour,
+                    SUM(current_viewers) as total_viewers,
+                    SUM(assigned_viewers) as total_assigned,
+                    SUM(humans) as total_humans,
+                    COUNT(DISTINCT streamer_id) as active_streamers
+                FROM worker_analytics
+                WHERE timestamp >= NOW() - INTERVAL '%s hours'
+                GROUP BY DATE_TRUNC('hour', timestamp)
+                ORDER BY hour DESC
+                """ % hours
+
+                trends = await conn.fetch(trends_query)
+
+                return {
+                    'summary': dict(summary) if summary else {},
+                    'top_assigned_streamers': [dict(row) for row in top_assigned],
+                    'hourly_trends': [dict(row) for row in trends],
+                    'period_hours': hours,
+                    'generated_at': datetime.now(timezone.utc)
+                }
+
+        except Exception as e:
+            logger.error(f"Error getting worker analytics summary: {e}")
+            return {
+                'summary': {},
+                'top_assigned_streamers': [],
+                'hourly_trends': [],
+                'period_hours': hours,
+                'generated_at': datetime.now(timezone.utc),
+                'error': str(e)
+            }
+
+    async def get_streamer_worker_analytics(self, streamer_id: int, hours: int = 24) -> List[Dict[str, Any]]:
+        """
+        Get worker analytics data for a specific streamer.
+
+        Args:
+            streamer_id: Streamer ID
+            hours: Number of hours to look back
+
+        Returns:
+            List of analytics records with timestamps
+        """
+        try:
+            async with self.get_connection() as conn:
+                query = """
+                SELECT
+                    timestamp,
+                    current_viewers,
+                    assigned_viewers,
+                    humans,
+                    logged_at
+                FROM worker_analytics
+                WHERE streamer_id = $1
+                AND timestamp >= NOW() - INTERVAL '%s hours'
+                ORDER BY timestamp DESC
+                """ % hours
+
+                records = await conn.fetch(query, streamer_id)
+                return [dict(record) for record in records]
+
+        except Exception as e:
+            logger.error(f"Error getting streamer worker analytics for {streamer_id}: {e}")
+            return []

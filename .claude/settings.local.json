@@ -19,7 +19,8 @@
       "Bash(curl:*)",
       "Bash(tasklist)",
       "Bash(taskkill:*)",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "Bash(del test_snags_connection.py)"
     ],
     "deny": [],
     "ask": []
