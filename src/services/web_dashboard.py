@@ -2126,9 +2126,12 @@ class WebDashboardService:
 
                 # Generate profile picture HTML
                 profile_url = getattr(streamer, 'profile_picture_url', None)
+                logger.debug(f"Profile URL for {streamer.username}: '{profile_url}'")
                 if profile_url and profile_url.strip():
+                    logger.debug(f"Using profile image for {streamer.username}")
                     profile_pic = f'<img src="{profile_url}" alt="{streamer.username}" style="width: 48px; height: 48px; border-radius: 50%; border: 2px solid #00ff00; object-fit: cover; display: block; margin: 0 auto;">'
                 else:
+                    logger.debug(f"Using placeholder for {streamer.username} - URL: '{profile_url}'")
                     profile_pic = f'<div style="width: 48px; height: 48px; border-radius: 50%; border: 2px solid #00ff00; background: #003300; display: flex; align-items: center; justify-content: center; color: #00ff00; font-size: 16px; margin: 0 auto;">{streamer.username[0].upper()}</div>'
 
                 # Get worker data from separate structure
