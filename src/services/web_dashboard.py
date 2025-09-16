@@ -2193,10 +2193,10 @@ class WebDashboardService:
                 logger.debug(f"Profile URL for {streamer.username}: '{profile_url}'")
                 if profile_url and profile_url.strip():
                     logger.debug(f"Using profile image for {streamer.username}")
-                    profile_pic = f'<img src="{profile_url}" alt="{streamer.username}" style="width: 48px; height: 48px; border-radius: 50%; border: 2px solid #00ff00; object-fit: cover; display: block; margin: 0 auto;">'
+                    profile_pic = f'<img src="{profile_url}" alt="{streamer.username}" style="width: 64px; height: 64px; border-radius: 50%; border: 2px solid #00ff00; object-fit: cover; display: block; margin: 0 auto;">'
                 else:
                     logger.debug(f"Using placeholder for {streamer.username} - URL: '{profile_url}'")
-                    profile_pic = f'<div style="width: 48px; height: 48px; border-radius: 50%; border: 2px solid #00ff00; background: #003300; display: flex; align-items: center; justify-content: center; color: #00ff00; font-size: 16px; margin: 0 auto;">{streamer.username[0].upper()}</div>'
+                    profile_pic = f'<div style="width: 64px; height: 64px; border-radius: 50%; border: 2px solid #00ff00; background: #003300; display: flex; align-items: center; justify-content: center; color: #00ff00; font-size: 20px; margin: 0 auto;">{streamer.username[0].upper()}</div>'
 
                 # Get worker data from separate structure
                 running_display = "-"
@@ -2406,9 +2406,13 @@ class WebDashboardService:
             border: 2px solid #00ff00;
             width: 95%;
             max-width: 1200px;
-            height: 90vh;
+            height: 85vh;
+            max-height: 800px;
             border-radius: 8px;
             position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
         }}
 
         .graph-modal-header {{
@@ -2493,11 +2497,14 @@ class WebDashboardService:
         }}
 
         .graph-container {{
-            height: calc(100% - 120px);
+            flex: 1;
+            min-height: 400px;
+            max-height: calc(100vh - 300px);
             background: #111111;
             border: 1px solid #333333;
             border-radius: 4px;
             padding: 10px;
+            overflow: hidden;
         }}
 
         .loading-spinner {{
@@ -2634,10 +2641,10 @@ class WebDashboardService:
 
                     // Update profile picture
                     if (profileCell && streamer.profile_picture_url) {{
-                        const profileImg = `<img src="${{streamer.profile_picture_url}}" alt="${{streamer.username}}" style="width: 48px; height: 48px; border-radius: 50%; border: 2px solid #00ff00; object-fit: cover; display: block; margin: 0 auto;">`;
+                        const profileImg = `<img src="${{streamer.profile_picture_url}}" alt="${{streamer.username}}" style="width: 64px; height: 64px; border-radius: 50%; border: 2px solid #00ff00; object-fit: cover; display: block; margin: 0 auto;">`;
                         profileCell.innerHTML = profileImg;
                     }} else if (profileCell) {{
-                        const placeholder = `<div style="width: 48px; height: 48px; border-radius: 50%; border: 2px solid #00ff00; background: #003300; display: flex; align-items: center; justify-content: center; color: #00ff00; font-size: 16px; margin: 0 auto;">${{streamer.username[0].toUpperCase()}}</div>`;
+                        const placeholder = `<div style="width: 64px; height: 64px; border-radius: 50%; border: 2px solid #00ff00; background: #003300; display: flex; align-items: center; justify-content: center; color: #00ff00; font-size: 20px; margin: 0 auto;">${{streamer.username[0].toUpperCase()}}</div>`;
                         profileCell.innerHTML = placeholder;
                     }}
 
@@ -3229,9 +3236,13 @@ class WebDashboardService:
             border: 2px solid #ff6600;
             width: 95%;
             max-width: 1200px;
-            height: 90vh;
+            height: 85vh;
+            max-height: 800px;
             border-radius: 8px;
             position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
         }
 
         .graph-modal-header {
@@ -3316,11 +3327,14 @@ class WebDashboardService:
         }
 
         .graph-container {
-            height: calc(100% - 120px);
+            flex: 1;
+            min-height: 400px;
+            max-height: calc(100vh - 300px);
             background: #111111;
             border: 1px solid #333333;
             border-radius: 4px;
             padding: 10px;
+            overflow: hidden;
         }
 
         .loading-spinner {
@@ -3426,8 +3440,8 @@ class WebDashboardService:
                         new Date(streamer.last_status_update).toLocaleString() : 'Never';
                     
                     const profilePicture = streamer.profile_picture_url ?
-                        `<img src="${streamer.profile_picture_url}" alt="${streamer.username}" style="width: 48px; height: 48px; border-radius: 50%; border: 2px solid #ff6600; object-fit: cover; display: block; margin: 0 auto;">` :
-                        `<div style="width: 48px; height: 48px; border-radius: 50%; border: 2px solid #ff6600; background: #0a0a0a; display: flex; align-items: center; justify-content: center; color: #ff6600; font-size: 16px; margin: 0 auto;">${streamer.username.charAt(0).toUpperCase()}</div>`;
+                        `<img src="${streamer.profile_picture_url}" alt="${streamer.username}" style="width: 64px; height: 64px; border-radius: 50%; border: 2px solid #ff6600; object-fit: cover; display: block; margin: 0 auto;">` :
+                        `<div style="width: 64px; height: 64px; border-radius: 50%; border: 2px solid #ff6600; background: #0a0a0a; display: flex; align-items: center; justify-content: center; color: #ff6600; font-size: 20px; margin: 0 auto;">${streamer.username.charAt(0).toUpperCase()}</div>`;
 
                     return `
                         <tr>
