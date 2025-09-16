@@ -34,15 +34,15 @@ async def test_user_dashboard_logic():
         port=int(os.getenv('DATABASE_PORT', 5432)),
         username=os.getenv('DATABASE_USER'),
         password=os.getenv('DATABASE_PASSWORD'),
-        database=os.getenv('DATABASE_NAME', 'kick_monitor')
+        database=os.getenv('DATABASE_NAME', 'kick_mon')
     )
 
     # Initialize services
     db_service = DatabaseService(db_config)
     await db_service.connect()
 
-    # Test with user cameron (ID should be 1 or 2 based on previous conversation)
-    test_user_id = 1  # Adjust this if needed
+    # Test with user cameron (ID is 5 based on database query)
+    test_user_id = 5  # From database: user cameron has ID 5
     test_username = "cameron"
 
     print(f"\n=== Testing User Dashboard Logic for {test_username} (ID: {test_user_id}) ===")
