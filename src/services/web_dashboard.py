@@ -2035,6 +2035,7 @@ class WebDashboardService:
                     all_streamers = []
                 # Convert to Streamer objects for template compatibility
                 streamers = []
+                streamers_with_worker_data = []  # Keep worker data separate
                 logger.debug(f"User {user_session.username} assigned streamer IDs: {streamer_ids}")
 
                 for streamer_data in all_streamers:
@@ -2045,7 +2046,7 @@ class WebDashboardService:
 
                         # Filter fields to only those that exist in the Streamer model
                         streamer_fields = {}
-                        for field_name in Streamer.__fields__:
+                        for field_name in Streamer.model_fields:  # Use model_fields instead of __fields__
                             if field_name in streamer_data:
                                 value = streamer_data[field_name]
                                 # Handle datetime fields
@@ -2061,11 +2062,15 @@ class WebDashboardService:
                         logger.debug(f"Creating Streamer object with fields: {list(streamer_fields.keys())}")
                         streamer = Streamer(**streamer_fields)
 
-                        # Add the worker data as attributes
-                        streamer.running_workers = streamer_data.get('running_workers', 0)
-                        streamer.assigned_capacity = streamer_data.get('assigned_capacity', 0)
-                        streamer.humans = streamer_data.get('humans', 0)
-                        streamers.append(streamer)
+                        # Keep worker data in a separate structure
+                        streamer_with_data = {
+                            'streamer': streamer,
+                            'running_workers': streamer_data.get('running_workers', 0),
+                            'assigned_capacity': streamer_data.get('assigned_capacity', 0),
+                            'humans': streamer_data.get('humans', 0)
+                        }
+                        streamers.append(streamer)  # For stats calculation
+                        streamers_with_worker_data.append(streamer_with_data)  # For HTML generation
                         logger.debug(f"Successfully added streamer: {streamer.username}")
 
                     except Exception as streamer_error:
@@ -2104,7 +2109,8 @@ class WebDashboardService:
         if streamers:
             # Generate streamer rows
             streamer_rows = ""
-            for streamer in streamers:
+            for streamer_data in streamers_with_worker_data:
+                streamer = streamer_data['streamer']
                 status_class = f"status-{streamer.status}"
                 last_seen = streamer.last_seen_online.strftime("%Y-%m-%d %H:%M") if streamer.last_seen_online else "Never"
                 last_update = streamer.last_status_update.strftime("%Y-%m-%d %H:%M") if streamer.last_status_update else "Never"
@@ -2125,16 +2131,16 @@ class WebDashboardService:
                 else:
                     profile_pic = f'<div style="width: 48px; height: 48px; border-radius: 50%; border: 2px solid #00ff00; background: #003300; display: flex; align-items: center; justify-content: center; color: #00ff00; font-size: 16px; margin: 0 auto;">{streamer.username[0].upper()}</div>'
 
-                # Get worker data from streamer attributes (already loaded)
+                # Get worker data from separate structure
                 running_display = "-"
                 assigned_display = "-"
                 humans_display = "-"
 
                 if streamer.status.value != 'offline':
                     # Only show worker data for online streamers
-                    running_workers = getattr(streamer, 'running_workers', 0)
-                    assigned_capacity = getattr(streamer, 'assigned_capacity', 0)
-                    humans = getattr(streamer, 'humans', 0)
+                    running_workers = streamer_data['running_workers']
+                    assigned_capacity = streamer_data['assigned_capacity']
+                    humans = streamer_data['humans']
 
                     if running_workers > 0:
                         running_display = f"{running_workers:,}"
