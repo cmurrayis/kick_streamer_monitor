@@ -21,7 +21,9 @@
       "Bash(taskkill:*)",
       "Bash(sed:*)",
       "Bash(del test_snags_connection.py)",
-      "Bash(journalctl:*)"
+      "Bash(journalctl:*)",
+      "Bash(del apply_analytics_schema.py)",
+      "Bash(timeout:*)"
     ],
     "deny": [],
     "ask": []

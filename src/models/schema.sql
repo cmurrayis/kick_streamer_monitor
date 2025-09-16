@@ -284,6 +284,87 @@ ALTER TABLE status_event ADD CONSTRAINT chk_status_event_type
 */
 
 -- =============================================================================
+-- ANALYTICS TABLES
+-- =============================================================================
+-- Tables for storing analytical data at 1-minute intervals and session tracking
+
+-- Streamer analytics data collected at 1-minute intervals
+CREATE TABLE IF NOT EXISTS streamer_analytics (
+    -- Primary key and relationships
+    id                   SERIAL PRIMARY KEY,
+    streamer_id          INTEGER NOT NULL REFERENCES streamer(id) ON DELETE CASCADE,
+    recorded_at          TIMESTAMP WITH TIME ZONE NOT NULL,
+
+    -- Core metrics (1-minute snapshot)
+    viewers              INTEGER NOT NULL CHECK (viewers >= 0),
+    running              BOOLEAN NOT NULL DEFAULT FALSE,
+    assigned             INTEGER NOT NULL DEFAULT 0 CHECK (assigned >= 0),
+
+    -- Status snapshot
+    status               VARCHAR(20) NOT NULL CHECK (status IN ('online', 'offline')),
+
+    -- Metadata
+    created_at           TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+
+    -- Prevent duplicate entries for same minute
+    UNIQUE(streamer_id, recorded_at)
+);
+
+-- Stream sessions for tracking complete streaming sessions
+CREATE TABLE IF NOT EXISTS stream_sessions (
+    -- Primary key and relationships
+    id                   SERIAL PRIMARY KEY,
+    streamer_id          INTEGER NOT NULL REFERENCES streamer(id) ON DELETE CASCADE,
+
+    -- Session tracking
+    session_start        TIMESTAMP WITH TIME ZONE NOT NULL,
+    session_end          TIMESTAMP WITH TIME ZONE,
+
+    -- Analytics during session
+    peak_viewers         INTEGER CHECK (peak_viewers >= 0),
+    avg_viewers          INTEGER CHECK (avg_viewers >= 0),
+    total_minutes        INTEGER CHECK (total_minutes >= 0),
+
+    -- Session metadata
+    kick_livestream_id   INTEGER,
+    created_at           TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at           TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =============================================================================
+-- ANALYTICS INDEXES
+-- =============================================================================
+
+-- Streamer analytics indexes for performance
+CREATE INDEX IF NOT EXISTS idx_streamer_analytics_streamer_recorded
+    ON streamer_analytics(streamer_id, recorded_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_streamer_analytics_recorded_at
+    ON streamer_analytics(recorded_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_streamer_analytics_status_viewers
+    ON streamer_analytics(status, viewers DESC) WHERE status = 'online';
+
+-- Stream sessions indexes for performance
+CREATE INDEX IF NOT EXISTS idx_stream_sessions_streamer_start
+    ON stream_sessions(streamer_id, session_start DESC);
+
+CREATE INDEX IF NOT EXISTS idx_stream_sessions_active
+    ON stream_sessions(streamer_id, session_start) WHERE session_end IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_stream_sessions_livestream_id
+    ON stream_sessions(kick_livestream_id) WHERE kick_livestream_id IS NOT NULL;
+
+-- =============================================================================
+-- ANALYTICS TRIGGERS
+-- =============================================================================
+
+-- Trigger to automatically update updated_at for stream_sessions
+CREATE TRIGGER update_stream_sessions_updated_at
+    BEFORE UPDATE ON stream_sessions
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- =============================================================================
 -- UTILITY VIEWS
 -- =============================================================================
 
@@ -406,10 +487,12 @@ ORDER BY tc.table_name, tc.constraint_type, tc.constraint_name;
 -- VACUUM ANALYZE streamer;
 -- VACUUM ANALYZE status_event;
 -- VACUUM ANALYZE configuration;
+-- VACUUM ANALYZE streamer_analytics;
+-- VACUUM ANALYZE stream_sessions;
 
 -- Schema version tracking (for migrations)
 INSERT INTO configuration (key, value, description, category, updated_by) VALUES
-    ('SCHEMA_VERSION', '1.0.0', 'Current database schema version', 'system', 'schema_init')
-ON CONFLICT (key) DO UPDATE SET 
+    ('SCHEMA_VERSION', '1.1.0', 'Current database schema version with analytics tables', 'system', 'schema_init')
+ON CONFLICT (key) DO UPDATE SET
     value = EXCLUDED.value,
     updated_at = CURRENT_TIMESTAMP;

@@ -23,6 +23,7 @@ from .config import ConfigCommands
 from .streamers import StreamerCommands
 from .service import ServiceCommands
 from .database import DatabaseCommands
+from .analytics import AnalyticsCommands
 from lib.logging import setup_logging
 
 # Version information
@@ -52,6 +53,10 @@ Examples:
   kick-monitor start --manual
   kick-monitor start --daemon
   kick-monitor status
+  kick-monitor analytics status
+  kick-monitor analytics query --streamer username
+  kick-monitor analytics sessions --active
+  kick-monitor analytics export --days 7
 
 For more help on a specific command:
   kick-monitor <command> --help
@@ -421,7 +426,135 @@ Report issues at: https://github.com/your-org/kick-monitor/issues
         action='store_true',
         help='Skip confirmation prompt'
     )
-    
+
+    # Analytics commands
+    analytics_parser = subparsers.add_parser(
+        'analytics',
+        help='Analytics data management',
+        description='View and manage analytics data collected at 1-minute intervals'
+    )
+    analytics_subparsers = analytics_parser.add_subparsers(
+        dest='analytics_command',
+        help='Analytics subcommands'
+    )
+
+    # analytics status
+    analytics_status_parser = analytics_subparsers.add_parser(
+        'status',
+        help='Show analytics collection status and statistics'
+    )
+    analytics_status_parser.add_argument(
+        '--format',
+        choices=['table', 'json'],
+        default='table',
+        help='Output format (default: table)'
+    )
+
+    # analytics query
+    analytics_query_parser = analytics_subparsers.add_parser(
+        'query',
+        help='Query analytics data with filters'
+    )
+    analytics_query_parser.add_argument(
+        '--streamer', '-s',
+        help='Filter by specific streamer username'
+    )
+    analytics_query_parser.add_argument(
+        '--hours',
+        type=int,
+        default=24,
+        help='Hours of data to retrieve (default: 24)'
+    )
+    analytics_query_parser.add_argument(
+        '--limit', '-l',
+        type=int,
+        default=100,
+        help='Maximum records to return (default: 100)'
+    )
+    analytics_query_parser.add_argument(
+        '--format',
+        choices=['table', 'json', 'csv'],
+        default='table',
+        help='Output format (default: table)'
+    )
+
+    # analytics sessions
+    analytics_sessions_parser = analytics_subparsers.add_parser(
+        'sessions',
+        help='Show stream session analytics'
+    )
+    analytics_sessions_parser.add_argument(
+        '--streamer', '-s',
+        help='Filter by specific streamer username'
+    )
+    analytics_sessions_parser.add_argument(
+        '--days',
+        type=int,
+        default=7,
+        help='Days of sessions to retrieve (default: 7)'
+    )
+    analytics_sessions_parser.add_argument(
+        '--limit', '-l',
+        type=int,
+        default=50,
+        help='Maximum sessions to return (default: 50)'
+    )
+    analytics_sessions_parser.add_argument(
+        '--active',
+        action='store_true',
+        help='Show only active sessions'
+    )
+    analytics_sessions_parser.add_argument(
+        '--format',
+        choices=['table', 'json', 'csv'],
+        default='table',
+        help='Output format (default: table)'
+    )
+
+    # analytics export
+    analytics_export_parser = analytics_subparsers.add_parser(
+        'export',
+        help='Export analytics data to file'
+    )
+    analytics_export_parser.add_argument(
+        '--output', '-o',
+        default='analytics_export.json',
+        help='Output file path (default: analytics_export.json)'
+    )
+    analytics_export_parser.add_argument(
+        '--streamer', '-s',
+        help='Export data for specific streamer only'
+    )
+    analytics_export_parser.add_argument(
+        '--days',
+        type=int,
+        default=30,
+        help='Days of data to export (default: 30)'
+    )
+    analytics_export_parser.add_argument(
+        '--format',
+        choices=['json'],
+        default='json',
+        help='Export format (default: json)'
+    )
+
+    # analytics cleanup
+    analytics_cleanup_parser = analytics_subparsers.add_parser(
+        'cleanup',
+        help='Clean up old analytics data'
+    )
+    analytics_cleanup_parser.add_argument(
+        '--days',
+        type=int,
+        default=30,
+        help='Keep data newer than N days (default: 30)'
+    )
+    analytics_cleanup_parser.add_argument(
+        '--dry-run',
+        action='store_true',
+        help='Show what would be deleted without deleting'
+    )
+
     # Service management commands (future implementation)
     service_mgmt_parser = subparsers.add_parser(
         'service',
@@ -508,6 +641,8 @@ async def run_command(args: argparse.Namespace) -> int:
             return await run_service_command(args)
         elif args.command == 'db':
             return await run_database_command(args)
+        elif args.command == 'analytics':
+            return await run_analytics_command(args)
         elif args.command == 'service':
             return await run_service_mgmt_command(args)
         else:
@@ -590,6 +725,25 @@ async def run_database_command(args: argparse.Namespace) -> int:
         return await commands.restore(args)
     else:
         print("Error: No database subcommand specified", file=sys.stderr)
+        return 6
+
+
+async def run_analytics_command(args: argparse.Namespace) -> int:
+    """Handle analytics subcommands."""
+    commands = AnalyticsCommands()
+
+    if args.analytics_command == 'status':
+        return await commands.status(args)
+    elif args.analytics_command == 'query':
+        return await commands.query(args)
+    elif args.analytics_command == 'sessions':
+        return await commands.sessions(args)
+    elif args.analytics_command == 'export':
+        return await commands.export(args)
+    elif args.analytics_command == 'cleanup':
+        return await commands.cleanup(args)
+    else:
+        print("Error: No analytics subcommand specified", file=sys.stderr)
         return 6
 
 

@@ -30,6 +30,7 @@ from services import (
 )
 from services.simple_monitor import SimpleMonitorService
 from services.web_dashboard import WebDashboardService
+from services.analytics import AnalyticsService
 from lib.logging import get_logger
 from .manual import run_manual_mode
 
@@ -46,6 +47,7 @@ class ServiceCommands:
         self.logger = get_logger(__name__)
         self._monitor_service: Optional[KickMonitorService] = None
         self._web_dashboard: Optional[WebDashboardService] = None
+        self._analytics_service: Optional[AnalyticsService] = None
         self._shutdown_requested = False
     
     async def start(self, args: argparse.Namespace) -> int:
@@ -138,7 +140,7 @@ class ServiceCommands:
             if db_health['status'] != 'healthy':
                 print(f"Error: Database connection failed: {db_health.get('error')}")
                 return 2
-            print("✓ Database connection OK")
+            print("Database connection OK")
             
             # Test OAuth
             await oauth_service.start()
@@ -149,11 +151,11 @@ class ServiceCommands:
             
             # Show auth test result
             if auth_test.get('browser_fallback_used'):
-                print("✓ OAuth + Browser fallback ready")
+                print(" OAuth + Browser fallback ready")
             elif auth_test.get('browser_fallback_available'):
-                print("✓ OAuth ready (browser fallback available)")
+                print(" OAuth ready (browser fallback available)")
             else:
-                print("✓ OAuth ready")
+                print(" OAuth ready")
             
             # Initialize monitoring service based on mode
             if simple_mode:
@@ -179,8 +181,19 @@ class ServiceCommands:
             # Start monitoring service
             print("Starting monitoring service...")
             await self._monitor_service.start()
-            
-            print(f"✓ Monitoring service started successfully")
+
+            print(f" Monitoring service started successfully")
+
+            # Start analytics service if not in manual mode
+            if mode != MonitoringMode.MANUAL:
+                print("Starting analytics collection service...")
+                self._analytics_service = AnalyticsService(
+                    database_service=db_service,
+                    oauth_service=oauth_service,
+                    collection_interval=60  # 1-minute intervals
+                )
+                await self._analytics_service.start()
+                print(" Analytics service started (1-minute intervals)")
             
             # Start web dashboard for daemon mode
             if daemon and enable_web_dashboard:
@@ -193,7 +206,7 @@ class ServiceCommands:
                     admin_password=admin_password
                 )
                 await self._web_dashboard.start()
-                print(f"✓ Web dashboard available at: {self._web_dashboard.url}")
+                print(f" Web dashboard available at: {self._web_dashboard.url}")
             
             # Different behavior based on mode
             if manual:
@@ -222,8 +235,13 @@ class ServiceCommands:
             
             # Check if we have a running service in this process
             if self._monitor_service and self._monitor_service.is_running:
+                # Stop analytics service first
+                if self._analytics_service:
+                    await self._analytics_service.stop()
+                    print(" Analytics service stopped")
+
                 await self._monitor_service.stop()
-                print("✓ Service stopped")
+                print(" Monitor service stopped")
                 return 0
             else:
                 print("No running service found in current process")
@@ -360,15 +378,21 @@ class ServiceCommands:
             if self._web_dashboard and self._web_dashboard.is_running:
                 print("Stopping web dashboard...")
                 await self._web_dashboard.stop()
-                print("✓ Web dashboard stopped")
-            
+                print(" Web dashboard stopped")
+
+            # Stop analytics service
+            if self._analytics_service:
+                print("Stopping analytics service...")
+                await self._analytics_service.stop()
+                print(" Analytics service stopped")
+
             # Stop monitoring service
             if self._monitor_service:
                 print("Stopping monitoring service...")
                 await self._monitor_service.stop()
-                print("✓ Monitoring service stopped")
+                print(" Monitoring service stopped")
             
-            print("✓ Shutdown complete")
+            print(" Shutdown complete")
             return 0
         
         except Exception as e:
