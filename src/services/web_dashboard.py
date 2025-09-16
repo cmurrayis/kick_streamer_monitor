@@ -141,8 +141,14 @@ class WebDashboardService:
         logger.info("Stopping web dashboard")
         
         # Close WebSocket connections
-        for ws in list(self._websocket_connections):
-            await ws.close()
+        for connection_info in list(self._websocket_connections):
+            if isinstance(connection_info, dict):
+                ws = connection_info.get('websocket')
+                if ws:
+                    await ws.close()
+            else:
+                # Handle old format (direct WebSocket objects)
+                await connection_info.close()
         self._websocket_connections.clear()
         
         # Stop server
@@ -225,6 +231,8 @@ class WebDashboardService:
         """WebSocket endpoint for real-time updates (user-specific)."""
         # Check user authentication first
         user_session = self._get_user_session(request)
+        logger.debug(f"WebSocket connection attempt, session: {user_session}")
+
         if not user_session:
             logger.warning("WebSocket connection rejected - no valid session")
             ws = WebSocketResponse()
