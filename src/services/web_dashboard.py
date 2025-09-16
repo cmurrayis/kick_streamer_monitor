@@ -2003,12 +2003,15 @@ class WebDashboardService:
 
                 logger.info(f"Fetched {len(all_streamers_basic)} basic streamers for user {user_session.username}")
 
-                # Convert to the format with worker data
+                # Get worker data and combine with streamers directly
                 if all_streamers_basic:
                     usernames = [s.username for s in all_streamers_basic]
                     worker_data_map = await self.database_service.snags_service.get_worker_data_for_multiple_streamers(usernames)
 
-                    all_streamers = []
+                    # Use the original Streamer objects directly (no conversion needed)
+                    streamers = []
+                    streamers_with_worker_data = []
+
                     for streamer in all_streamers_basic:
                         worker_data = worker_data_map.get(streamer.username, {'running': 0, 'assigned': 0})
                         current_viewers = getattr(streamer, 'current_viewers', None)
@@ -2023,60 +2026,23 @@ class WebDashboardService:
                         assigned_capacity = worker_data['assigned']
                         humans = max(0, current_viewers - running_workers)
 
-                        streamer_dict = streamer.dict()
-                        streamer_dict.update({
-                            'current_viewers': current_viewers,
-                            'running_workers': running_workers,
-                            'assigned_capacity': assigned_capacity,
-                            'humans': humans
-                        })
-                        all_streamers.append(streamer_dict)
-                else:
-                    all_streamers = []
-                # Convert to Streamer objects for template compatibility
-                streamers = []
-                streamers_with_worker_data = []  # Keep worker data separate
-                logger.debug(f"User {user_session.username} assigned streamer IDs: {streamer_ids}")
-
-                for streamer_data in all_streamers:
-                    try:
-                        logger.debug(f"Processing assigned streamer: {streamer_data['username']} (ID: {streamer_data['id']})")
-                        # Convert dict back to Streamer object for compatibility
-                        from models.streamer import Streamer
-
-                        # Filter fields to only those that exist in the Streamer model
-                        streamer_fields = {}
-                        for field_name in Streamer.model_fields:  # Use model_fields instead of __fields__
-                            if field_name in streamer_data:
-                                value = streamer_data[field_name]
-                                # Handle datetime fields
-                                if field_name in ['created_at', 'updated_at', 'last_seen_online', 'last_status_update']:
-                                    if isinstance(value, str):
-                                        from datetime import datetime
-                                        try:
-                                            value = datetime.fromisoformat(value.replace('Z', '+00:00'))
-                                        except:
-                                            pass
-                                streamer_fields[field_name] = value
-
-                        logger.debug(f"Creating Streamer object with fields: {list(streamer_fields.keys())}")
-                        streamer = Streamer(**streamer_fields)
+                        # Update the current_viewers on the streamer object if needed
+                        if hasattr(streamer, 'current_viewers'):
+                            streamer.current_viewers = current_viewers
 
                         # Keep worker data in a separate structure
                         streamer_with_data = {
                             'streamer': streamer,
-                            'running_workers': streamer_data.get('running_workers', 0),
-                            'assigned_capacity': streamer_data.get('assigned_capacity', 0),
-                            'humans': streamer_data.get('humans', 0)
+                            'running_workers': running_workers,
+                            'assigned_capacity': assigned_capacity,
+                            'humans': humans
                         }
                         streamers.append(streamer)  # For stats calculation
                         streamers_with_worker_data.append(streamer_with_data)  # For HTML generation
                         logger.debug(f"Successfully added streamer: {streamer.username}")
-
-                    except Exception as streamer_error:
-                        logger.error(f"Error processing streamer {streamer_data.get('username', 'unknown')}: {streamer_error}")
-                        logger.error(f"Streamer data keys: {list(streamer_data.keys())}")
-                        # Continue with other streamers even if one fails
+                else:
+                    streamers = []
+                    streamers_with_worker_data = []
 
                 logger.info(f"Found {len(streamers)} assigned streamers for user {user_session.username}")
             else:
