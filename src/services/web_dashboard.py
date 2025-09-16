@@ -222,13 +222,29 @@ class WebDashboardService:
             )
     
     async def _handle_websocket(self, request: Request) -> WebSocketResponse:
-        """WebSocket endpoint for real-time updates."""
+        """WebSocket endpoint for real-time updates (user-specific)."""
+        # Check user authentication first
+        user_session = self._get_user_session(request)
+        if not user_session:
+            logger.warning("WebSocket connection rejected - no valid session")
+            ws = WebSocketResponse()
+            await ws.prepare(request)
+            await ws.close(code=WSCloseCode.UNSUPPORTED_DATA, message=b'Authentication required')
+            return ws
+
         ws = WebSocketResponse()
         await ws.prepare(request)
-        
-        self._websocket_connections.add(ws)
-        logger.debug("WebSocket client connected")
-        
+
+        # Store user-specific connection
+        connection_info = {
+            'websocket': ws,
+            'user_id': user_session.user_id,
+            'username': user_session.username,
+            'role': user_session.role
+        }
+        self._websocket_connections.add(connection_info)
+        logger.debug(f"WebSocket client connected for user: {user_session.username}")
+
         try:
             async for msg in ws:
                 if msg.type == WSMsgType.ERROR:
@@ -237,9 +253,9 @@ class WebDashboardService:
         except Exception as e:
             logger.error(f"WebSocket error: {e}")
         finally:
-            self._websocket_connections.discard(ws)
-            logger.debug("WebSocket client disconnected")
-        
+            self._websocket_connections.discard(connection_info)
+            logger.debug(f"WebSocket client disconnected for user: {user_session.username}")
+
         return ws
     
     async def _handle_login_page(self, request: Request) -> Response:
@@ -742,33 +758,66 @@ class WebDashboardService:
         while self._is_running:
             try:
                 if self._websocket_connections:
-                    # Get current data
+                    # Get global stats (for admins) and all streamers
                     if hasattr(self.monitor_service, 'get_monitoring_stats'):
-                        stats = self.monitor_service.get_monitoring_stats()
+                        global_stats = self.monitor_service.get_monitoring_stats()
                     else:
-                        stats = self.monitor_service.get_stats()
-                    
+                        global_stats = self.monitor_service.get_stats()
+
                     if hasattr(self.monitor_service, 'get_streamer_details'):
-                        streamers = await self.monitor_service.get_streamer_details()
+                        all_streamers = await self.monitor_service.get_streamer_details()
                     else:
-                        streamers = []
-                    
-                    # Broadcast to all connections
-                    update_data = {
-                        "type": "update",
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
-                        "stats": stats,
-                        "streamers": streamers
-                    }
-                    
+                        all_streamers = []
+
+                    # Send user-specific data to each connection
                     disconnected = set()
-                    for ws in self._websocket_connections:
+                    for connection_info in list(self._websocket_connections):
                         try:
+                            ws = connection_info['websocket']
+                            user_id = connection_info['user_id']
+                            role = connection_info['role']
+
+                            if role == 'ADMIN':
+                                # Admins see all streamers and global stats
+                                user_streamers = all_streamers
+                                user_stats = global_stats
+                            else:
+                                # Regular users only see their assigned streamers
+                                assignments = await self.database_service.get_user_streamer_assignments(user_id)
+                                assigned_streamer_ids = [a.streamer_id for a in assignments]
+
+                                # Filter streamers to only assigned ones
+                                user_streamers = [s for s in all_streamers if s.get('id') in assigned_streamer_ids]
+
+                                # Calculate user-specific stats
+                                user_stats = {
+                                    "service_status": global_stats.get("service_status", {}),
+                                    "streamers": {
+                                        "total_monitored": len(user_streamers),
+                                        "online": len([s for s in user_streamers if s.get('status') == 'online']),
+                                        "offline": len([s for s in user_streamers if s.get('status') == 'offline']),
+                                        "unknown": len([s for s in user_streamers if s.get('status') == 'unknown']),
+                                        "subscribed": 0,
+                                        "failed": 0
+                                    },
+                                    "connections": global_stats.get("connections", {}),
+                                    "processing": global_stats.get("processing", {})
+                                }
+
+                            # Send user-specific update
+                            update_data = {
+                                "type": "update",
+                                "timestamp": datetime.now(timezone.utc).isoformat(),
+                                "stats": user_stats,
+                                "streamers": user_streamers
+                            }
+
                             await ws.send_str(json.dumps(update_data, default=str))
+
                         except Exception as e:
                             logger.debug(f"WebSocket send error: {e}")
-                            disconnected.add(ws)
-                    
+                            disconnected.add(connection_info)
+
                     # Clean up disconnected clients
                     self._websocket_connections -= disconnected
                 
