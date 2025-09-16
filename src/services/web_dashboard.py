@@ -1984,15 +1984,24 @@ class WebDashboardService:
         try:
             assignments = await self.database_service.get_user_streamer_assignments(user_session.user_id)
             streamer_ids = [a.streamer_id for a in assignments]
-            
+
+            logger.info(f"User {user_session.username} (ID: {user_session.user_id}) has {len(assignments)} assignments")
+            logger.debug(f"Assignment details: {[(a.streamer_id, getattr(a, 'assigned_at', 'N/A')) for a in assignments]}")
+
             if streamer_ids:
                 # Get ALL streamers data with worker assignments (not just active ones)
                 # This ensures user can see their assigned streamers even if they're inactive
                 all_streamers_basic = []
                 for streamer_id in streamer_ids:
+                    logger.debug(f"Fetching streamer ID: {streamer_id}")
                     streamer = await self.database_service.get_streamer_by_id(streamer_id)
                     if streamer:
+                        logger.debug(f"Found streamer: {streamer.username} (ID: {streamer.id}, Status: {streamer.status})")
                         all_streamers_basic.append(streamer)
+                    else:
+                        logger.warning(f"Streamer with ID {streamer_id} not found in database")
+
+                logger.info(f"Fetched {len(all_streamers_basic)} basic streamers for user {user_session.username}")
 
                 # Convert to the format with worker data
                 if all_streamers_basic:
@@ -2029,30 +2038,56 @@ class WebDashboardService:
                 logger.debug(f"User {user_session.username} assigned streamer IDs: {streamer_ids}")
 
                 for streamer_data in all_streamers:
-                    logger.debug(f"Processing assigned streamer: {streamer_data['username']} (ID: {streamer_data['id']})")
-                    # Convert dict back to Streamer object for compatibility
-                    from models.streamer import Streamer
+                    try:
+                        logger.debug(f"Processing assigned streamer: {streamer_data['username']} (ID: {streamer_data['id']})")
+                        # Convert dict back to Streamer object for compatibility
+                        from models.streamer import Streamer
 
-                    # Filter fields to only those that exist in the Streamer model
-                    streamer_fields = {}
-                    for field_name in Streamer.__fields__:
-                        if field_name in streamer_data:
-                            streamer_fields[field_name] = streamer_data[field_name]
+                        # Filter fields to only those that exist in the Streamer model
+                        streamer_fields = {}
+                        for field_name in Streamer.__fields__:
+                            if field_name in streamer_data:
+                                value = streamer_data[field_name]
+                                # Handle datetime fields
+                                if field_name in ['created_at', 'updated_at', 'last_seen_online', 'last_status_update']:
+                                    if isinstance(value, str):
+                                        from datetime import datetime
+                                        try:
+                                            value = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                                        except:
+                                            pass
+                                streamer_fields[field_name] = value
 
-                    streamer = Streamer(**streamer_fields)
-                    # Add the worker data as attributes
-                    streamer.running_workers = streamer_data.get('running_workers', 0)
-                    streamer.assigned_capacity = streamer_data.get('assigned_capacity', 0)
-                    streamer.humans = streamer_data.get('humans', 0)
-                    streamers.append(streamer)
+                        logger.debug(f"Creating Streamer object with fields: {list(streamer_fields.keys())}")
+                        streamer = Streamer(**streamer_fields)
+
+                        # Add the worker data as attributes
+                        streamer.running_workers = streamer_data.get('running_workers', 0)
+                        streamer.assigned_capacity = streamer_data.get('assigned_capacity', 0)
+                        streamer.humans = streamer_data.get('humans', 0)
+                        streamers.append(streamer)
+                        logger.debug(f"Successfully added streamer: {streamer.username}")
+
+                    except Exception as streamer_error:
+                        logger.error(f"Error processing streamer {streamer_data.get('username', 'unknown')}: {streamer_error}")
+                        logger.error(f"Streamer data keys: {list(streamer_data.keys())}")
+                        # Continue with other streamers even if one fails
 
                 logger.info(f"Found {len(streamers)} assigned streamers for user {user_session.username}")
             else:
+                logger.info(f"No streamer IDs found for user {user_session.username}")
                 streamers = []
         except Exception as e:
             logger.error(f"Error fetching user streamers: {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             streamers = []
-        
+
+        # Log final streamers list before stats calculation
+        logger.info(f"Final streamers list for {user_session.username}: {len(streamers)} streamers")
+        for s in streamers:
+            logger.debug(f"  - {s.username} ({s.status.value})")
+
         # Calculate initial stats
         online_count = sum(1 for s in streamers if s.status.value == 'online')
         offline_count = len(streamers) - online_count
@@ -2062,6 +2097,8 @@ class WebDashboardService:
         for s in streamers:
             if s.status.value == 'online' and hasattr(s, 'current_viewers') and s.current_viewers is not None:
                 total_viewers += s.current_viewers
+
+        logger.info(f"Stats calculated - Assigned: {len(streamers)}, Online: {online_count}, Offline: {offline_count}, Total Viewers: {total_viewers}")
         
         # Generate content based on streamers
         if streamers:
@@ -2142,7 +2179,10 @@ class WebDashboardService:
             '''
         else:
             main_content = '<div class="no-streamers">No streamers assigned to your account.<br>Contact an administrator to assign streamers.</div>'
-        
+
+        # Final debug log
+        logger.info(f"About to return template with {len(streamers)} streamers, online_count={online_count}, offline_count={offline_count}")
+
         return f'''<!DOCTYPE html>
 <html lang="en">
 <head>

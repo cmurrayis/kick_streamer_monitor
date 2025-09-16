@@ -20,7 +20,8 @@
       "Bash(tasklist)",
       "Bash(taskkill:*)",
       "Bash(sed:*)",
-      "Bash(del test_snags_connection.py)"
+      "Bash(del test_snags_connection.py)",
+      "Bash(journalctl:*)"
     ],
     "deny": [],
     "ask": []
