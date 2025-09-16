@@ -332,21 +332,32 @@ class DatabaseService:
         if not streamers:
             return []
 
-        # Get assigned viewers from snags database
+        # Get worker data from snags database (running and assigned)
         usernames = [s.username for s in streamers]
-        assigned_viewers_map = await self.snags_service.get_assigned_viewers_for_multiple_streamers(usernames)
+        worker_data_map = await self.snags_service.get_worker_data_for_multiple_streamers(usernames)
 
         # Combine data
         result = []
         for streamer in streamers:
-            assigned_viewers = assigned_viewers_map.get(streamer.username, 0)
-            current_viewers = getattr(streamer, 'current_viewers', None) or 0
-            humans = max(0, current_viewers - assigned_viewers)  # Can't be negative
+            worker_data = worker_data_map.get(streamer.username, {'running': 0, 'assigned': 0})
+            current_viewers = getattr(streamer, 'current_viewers', None)
+
+            # Handle offline streamers - force viewer counts to 0 if offline
+            if streamer.status.value == 'offline':
+                current_viewers = 0
+            else:
+                current_viewers = current_viewers or 0
+
+            running_workers = worker_data['running']
+            assigned_capacity = worker_data['assigned']
+            humans = max(0, current_viewers - running_workers)  # Can't be negative
 
             streamer_data = streamer.dict()
             streamer_data.update({
-                'assigned_viewers': assigned_viewers,
-                'humans': humans
+                'current_viewers': current_viewers,  # Ensure offline = 0
+                'running_workers': running_workers,  # This will be "Running" column
+                'assigned_capacity': assigned_capacity,  # This will be "Assigned" column
+                'humans': humans  # Viewers - Running Workers
             })
 
             result.append(streamer_data)
@@ -391,17 +402,27 @@ class DatabaseService:
         """Update streamer status with timestamp."""
         async with self.transaction() as conn:
             query = """
-            UPDATE streamer 
-            SET status = $2::varchar, 
+            UPDATE streamer
+            SET status = $2::varchar,
                 last_status_update = $3,
-                last_seen_online = CASE 
-                    WHEN $2::varchar = 'online' THEN $3 
-                    ELSE last_seen_online 
+                last_seen_online = CASE
+                    WHEN $2::varchar = 'online' THEN $3
+                    ELSE last_seen_online
+                END,
+                current_viewers = CASE
+                    WHEN $2::varchar = 'offline' THEN 0
+                    ELSE current_viewers
+                END,
+                is_live = CASE
+                    WHEN $2::varchar = 'offline' THEN false
+                    ELSE is_live
                 END,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = $1
-            RETURNING id, kick_user_id, username, display_name, status, 
-                     last_seen_online, last_status_update, created_at, updated_at, is_active
+            RETURNING id, kick_user_id, username, display_name, status,
+                     last_seen_online, last_status_update, created_at, updated_at, is_active,
+                     current_viewers, peak_viewers, avg_viewers, livestream_id,
+                     profile_picture_url, bio, follower_count, is_live, is_verified
             """
             
             record = await conn.fetchrow(

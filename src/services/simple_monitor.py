@@ -547,8 +547,9 @@ class SimpleMonitorService:
                     "current_viewers": streamer_data.get("current_viewers"),
                     "peak_viewers": streamer_data.get("peak_viewers"),
                     "avg_viewers": streamer_data.get("avg_viewers"),
-                    "assigned_viewers": streamer_data.get("assigned_viewers", 0),  # New field
-                    "humans": streamer_data.get("humans", 0),  # New field
+                    "running_workers": streamer_data.get("running_workers", 0),  # Running workers (wrk_count)
+                    "assigned_capacity": streamer_data.get("assigned_capacity", 0),  # Assigned capacity (count)
+                    "humans": streamer_data.get("humans", 0),  # Viewers - Running workers
                     "profile_picture_url": streamer_data.get("profile_picture_url"),
                     "is_subscribed": False,  # Simple mode doesn't use subscriptions
                     "subscription_time": None,
@@ -574,7 +575,8 @@ class SimpleMonitorService:
                     "current_viewers": getattr(streamer, 'current_viewers', None),
                     "peak_viewers": getattr(streamer, 'peak_viewers', None),
                     "avg_viewers": getattr(streamer, 'avg_viewers', None),
-                    "assigned_viewers": 0,  # Default to 0 on error
+                    "running_workers": 0,  # Default to 0 on error
+                    "assigned_capacity": 0,  # Default to 0 on error
                     "humans": getattr(streamer, 'current_viewers', None) or 0,  # Fallback to current viewers
                     "profile_picture_url": getattr(streamer, 'profile_picture_url', None),
                     "is_subscribed": False,

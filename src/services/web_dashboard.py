@@ -1309,7 +1309,8 @@ class WebDashboardService:
                     'last_status_update': streamer_data['last_status_update'].isoformat() if streamer_data.get('last_status_update') else None,
                     'is_active': streamer_data.get('is_active', True),
                     'current_viewers': streamer_data.get('current_viewers'),
-                    'assigned_viewers': streamer_data.get('assigned_viewers', 0),
+                    'running_workers': streamer_data.get('running_workers', 0),
+                    'assigned_capacity': streamer_data.get('assigned_capacity', 0),
                     'humans': streamer_data.get('humans', 0),
                     'profile_picture_url': streamer_data.get('profile_picture_url')
                 })
@@ -2051,6 +2052,7 @@ class WebDashboardService:
                         <th>Streamer</th>
                         <th>Status</th>
                         <th>Viewers</th>
+                        <th>Running</th>
                         <th>Assigned</th>
                         <th>Humans</th>
                         <th>Last Seen Online</th>
@@ -2304,6 +2306,7 @@ class WebDashboardService:
                 if (row) {{
                     const statusCell = row.querySelector('.streamer-status');
                     const viewerCell = row.querySelector('.viewer-count');
+                    const runningCell = row.querySelector('.running-count');
                     const assignedCell = row.querySelector('.assigned-count');
                     const humansCell = row.querySelector('.humans-count');
                     const lastSeenCell = row.querySelector('.last-seen');
@@ -2337,16 +2340,29 @@ class WebDashboardService:
                     }}
                     viewerCell.textContent = viewerDisplay;
 
-                    // Update assigned viewers
+                    // Update running workers
+                    let runningDisplay = "-";
+                    if (streamer.status === 'offline') {{
+                        runningDisplay = "-";
+                    }} else if (streamer.running_workers !== undefined && streamer.running_workers !== null) {{
+                        runningDisplay = streamer.running_workers.toLocaleString();
+                    }}
+                    if (runningCell) runningCell.textContent = runningDisplay;
+
+                    // Update assigned capacity
                     let assignedDisplay = "-";
-                    if (streamer.assigned_viewers !== undefined && streamer.assigned_viewers !== null) {{
-                        assignedDisplay = streamer.assigned_viewers.toLocaleString();
+                    if (streamer.status === 'offline') {{
+                        assignedDisplay = "-";
+                    }} else if (streamer.assigned_capacity !== undefined && streamer.assigned_capacity !== null) {{
+                        assignedDisplay = streamer.assigned_capacity.toLocaleString();
                     }}
                     if (assignedCell) assignedCell.textContent = assignedDisplay;
 
                     // Update humans count
                     let humansDisplay = "-";
-                    if (streamer.humans !== undefined && streamer.humans !== null) {{
+                    if (streamer.status === 'offline') {{
+                        humansDisplay = "-";
+                    }} else if (streamer.humans !== undefined && streamer.humans !== null) {{
                         humansDisplay = streamer.humans.toLocaleString();
                     }}
                     if (humansCell) humansCell.textContent = humansDisplay;
@@ -2701,6 +2717,7 @@ class WebDashboardService:
                     <th>Username</th>
                     <th>Status</th>
                     <th>Viewers</th>
+                    <th>Running</th>
                     <th>Assigned</th>
                     <th>Humans</th>
                     <th>Last Seen Online</th>
@@ -2709,7 +2726,7 @@ class WebDashboardService:
                 </tr>
             </thead>
             <tbody id="streamers-tbody">
-                <tr><td colspan="10" style="text-align: center;">Loading streamers...</td></tr>
+                <tr><td colspan="11" style="text-align: center;">Loading streamers...</td></tr>
             </tbody>
         </table>
     </div>
@@ -2750,7 +2767,7 @@ class WebDashboardService:
                 const tbody = document.getElementById('streamers-tbody');
                 
                 if (!streamers || streamers.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="10" style="text-align: center;">No streamers found</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="11" style="text-align: center;">No streamers found</td></tr>';
                     return;
                 }
                 
@@ -2771,9 +2788,10 @@ class WebDashboardService:
                             <td class="profile-pic-column">${profilePicture}</td>
                             <td>${streamer.username}</td>
                             <td class="${statusClass}">${streamer.status.toUpperCase()}</td>
-                            <td>${streamer.current_viewers !== undefined && streamer.current_viewers !== null ? streamer.current_viewers.toLocaleString() : '-'}</td>
-                            <td>${streamer.assigned_viewers !== undefined && streamer.assigned_viewers !== null ? streamer.assigned_viewers.toLocaleString() : '-'}</td>
-                            <td>${streamer.humans !== undefined && streamer.humans !== null ? streamer.humans.toLocaleString() : '-'}</td>
+                            <td>${streamer.status.toLowerCase() === 'offline' ? '-' : (streamer.current_viewers !== undefined && streamer.current_viewers !== null ? streamer.current_viewers.toLocaleString() : '-')}</td>
+                            <td>${streamer.status.toLowerCase() === 'offline' ? '-' : (streamer.running_workers !== undefined && streamer.running_workers !== null ? streamer.running_workers.toLocaleString() : '-')}</td>
+                            <td>${streamer.status.toLowerCase() === 'offline' ? '-' : (streamer.assigned_capacity !== undefined && streamer.assigned_capacity !== null ? streamer.assigned_capacity.toLocaleString() : '-')}</td>
+                            <td>${streamer.status.toLowerCase() === 'offline' ? '-' : (streamer.humans !== undefined && streamer.humans !== null ? streamer.humans.toLocaleString() : '-')}</td>
                             <td>${lastSeen}</td>
                             <td>${lastUpdate}</td>
                             <td>
@@ -2794,7 +2812,7 @@ class WebDashboardService:
             .catch(error => {
                 console.error('Failed to load streamers:', error);
                 document.getElementById('streamers-tbody').innerHTML =
-                    '<tr><td colspan="10" style="text-align: center; color: #ff6666;">Failed to load streamers</td></tr>';
+                    '<tr><td colspan="11" style="text-align: center; color: #ff6666;">Failed to load streamers</td></tr>';
             });
     </script>
 </body>

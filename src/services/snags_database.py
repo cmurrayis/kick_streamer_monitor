@@ -87,6 +87,44 @@ class SnagsDatabaseService:
         except Exception as e:
             logger.error(f"Error disconnecting from snags database: {e}")
 
+    async def get_worker_data_for_streamer(self, username: str) -> Dict[str, int]:
+        """
+        Get both running workers and assigned capacity for a specific streamer.
+
+        Args:
+            username: Streamer username (target in worker table)
+
+        Returns:
+            Dict with 'running' (wrk_count sum) and 'assigned' (count sum)
+        """
+        if not self._is_connected:
+            await self.connect()
+
+        try:
+            async with self._connection_pool.acquire() as conn:
+                query = """
+                SELECT
+                    SUM(
+                        CASE
+                            WHEN wrk_count ~ '^[0-9]+$' THEN wrk_count::integer
+                            ELSE 0
+                        END
+                    ) as running_workers,
+                    SUM(COALESCE(count, 0)) as assigned_capacity
+                FROM worker
+                WHERE target = $1 AND target IS NOT NULL
+                """
+
+                result = await conn.fetchrow(query, username)
+                return {
+                    'running': result['running_workers'] or 0,
+                    'assigned': result['assigned_capacity'] or 0
+                }
+
+        except Exception as e:
+            logger.error(f"Error getting worker data for {username}: {e}")
+            return {'running': 0, 'assigned': 0}
+
     async def get_assigned_viewers_for_streamer(self, username: str) -> int:
         """
         Get total assigned viewers/workers for a specific streamer.
@@ -119,6 +157,57 @@ class SnagsDatabaseService:
         except Exception as e:
             logger.error(f"Error getting assigned viewers for {username}: {e}")
             return 0
+
+    async def get_worker_data_for_multiple_streamers(self, usernames: List[str]) -> Dict[str, Dict[str, int]]:
+        """
+        Get worker data for multiple streamers efficiently.
+
+        Args:
+            usernames: List of streamer usernames
+
+        Returns:
+            Dictionary mapping username to {'running': int, 'assigned': int}
+        """
+        if not self._is_connected:
+            await self.connect()
+
+        if not usernames:
+            return {}
+
+        try:
+            async with self._connection_pool.acquire() as conn:
+                query = """
+                SELECT
+                    target,
+                    SUM(
+                        CASE
+                            WHEN wrk_count ~ '^[0-9]+$' THEN wrk_count::integer
+                            ELSE 0
+                        END
+                    ) as running_workers,
+                    SUM(COALESCE(count, 0)) as assigned_capacity
+                FROM worker
+                WHERE target = ANY($1) AND target IS NOT NULL
+                GROUP BY target
+                """
+
+                rows = await conn.fetch(query, usernames)
+
+                # Create result dictionary with all usernames (default to 0)
+                result = {username: {'running': 0, 'assigned': 0} for username in usernames}
+
+                # Update with actual values
+                for row in rows:
+                    result[row['target']] = {
+                        'running': row['running_workers'] or 0,
+                        'assigned': row['assigned_capacity'] or 0
+                    }
+
+                return result
+
+        except Exception as e:
+            logger.error(f"Error getting worker data for multiple streamers: {e}")
+            return {username: {'running': 0, 'assigned': 0} for username in usernames}
 
     async def get_assigned_viewers_for_multiple_streamers(self, usernames: List[str]) -> Dict[str, int]:
         """
