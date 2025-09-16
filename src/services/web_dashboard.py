@@ -46,7 +46,7 @@ class WebDashboardService:
         
         # Rate limiting for registration attempts
         self.registration_attempts = {}  # Track registration attempts by IP
-        self._websocket_connections = set()
+        self._websocket_connections = []
     
     async def start(self) -> None:
         """Start the web dashboard server."""
@@ -250,7 +250,7 @@ class WebDashboardService:
             'username': user_session.username,
             'role': user_session.role
         }
-        self._websocket_connections.add(connection_info)
+        self._websocket_connections.append(connection_info)
         logger.debug(f"WebSocket client connected for user: {user_session.username}")
 
         try:
@@ -261,7 +261,8 @@ class WebDashboardService:
         except Exception as e:
             logger.error(f"WebSocket error: {e}")
         finally:
-            self._websocket_connections.discard(connection_info)
+            if connection_info in self._websocket_connections:
+                self._websocket_connections.remove(connection_info)
             logger.debug(f"WebSocket client disconnected for user: {user_session.username}")
 
         return ws
@@ -827,7 +828,9 @@ class WebDashboardService:
                             disconnected.add(connection_info)
 
                     # Clean up disconnected clients
-                    self._websocket_connections -= disconnected
+                    for conn in disconnected:
+                        if conn in self._websocket_connections:
+                            self._websocket_connections.remove(conn)
                 
                 # Update every 5 seconds
                 await asyncio.sleep(5)
