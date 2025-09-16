@@ -221,41 +221,12 @@ class AnalyticsService:
         # Always get assigned user count regardless of API success/failure
         assigned_count = await self._get_assigned_user_count(streamer.id)
 
-        try:
-            # Get current stream info from API
-            stream_info = await self.oauth_service.get_channel_info(streamer.username)
+        # First, get the current streamer status from the database (more reliable than API)
+        current_streamer = await self._get_current_streamer_status(streamer.id)
 
-            if not stream_info:
-                # Streamer is offline or API failed - still record the data point
-                logger.debug(f"No stream info for {streamer.username} - recording as offline")
-                return StreamerAnalyticsData(
-                    streamer_id=streamer.id,
-                    username=streamer.username,
-                    viewers=0,
-                    running=False,
-                    assigned=assigned_count,
-                    status='offline',
-                    recorded_at=recorded_at
-                )
-
-            # Extract analytics from stream info
-            viewers = stream_info.get('viewers', 0)
-            is_live = stream_info.get('is_live', False)
-
-            logger.debug(f"Collected data for {streamer.username}: viewers={viewers}, live={is_live}")
-            return StreamerAnalyticsData(
-                streamer_id=streamer.id,
-                username=streamer.username,
-                viewers=viewers,
-                running=is_live,
-                assigned=assigned_count,
-                status='online' if is_live else 'offline',
-                recorded_at=recorded_at
-            )
-
-        except Exception as e:
-            # Even if API fails, we still want to record a data point for continuity
-            logger.warning(f"API failed for {streamer.username}, recording as offline: {e}")
+        # If streamer is offline according to our monitoring, record as offline
+        if not current_streamer or current_streamer.status == 'offline':
+            logger.debug(f"Streamer {streamer.username} is offline according to monitoring system")
             return StreamerAnalyticsData(
                 streamer_id=streamer.id,
                 username=streamer.username,
@@ -265,6 +236,80 @@ class AnalyticsService:
                 status='offline',
                 recorded_at=recorded_at
             )
+
+        # Streamer is online according to monitoring, try to get additional data from recent activity
+        try:
+            # Check if there's recent status events or activity data we can use
+            recent_activity = await self._get_recent_activity_data(streamer.id)
+
+            if recent_activity:
+                viewers = recent_activity.get('viewers', 0)
+                logger.debug(f"Using recent activity data for {streamer.username}: viewers={viewers}")
+                return StreamerAnalyticsData(
+                    streamer_id=streamer.id,
+                    username=streamer.username,
+                    viewers=viewers,
+                    running=True,  # We know it's running from monitoring
+                    assigned=assigned_count,
+                    status='online',
+                    recorded_at=recorded_at
+                )
+
+        except Exception as e:
+            logger.debug(f"Failed to get recent activity for {streamer.username}: {e}")
+
+        # No recent activity data available, but streamer is online according to monitoring
+        # Record as online with unknown viewer count
+        logger.debug(f"Using monitoring status for {streamer.username} - online but no viewer data available")
+        return StreamerAnalyticsData(
+            streamer_id=streamer.id,
+            username=streamer.username,
+            viewers=0,  # Could not get viewer count - main monitoring will update this
+            running=True,  # We know it's running from monitoring
+            assigned=assigned_count,
+            status='online',  # Use monitoring status
+            recorded_at=recorded_at
+        )
+
+    async def _get_current_streamer_status(self, streamer_id: int) -> Optional[Streamer]:
+        """Get current streamer status from the database."""
+        try:
+            async with self.database_service.transaction() as conn:
+                result = await conn.fetchrow(
+                    "SELECT id, kick_user_id, username, display_name, status, last_seen_online, last_status_update, created_at, updated_at, is_active FROM streamer WHERE id = $1",
+                    streamer_id
+                )
+                return Streamer(**dict(result)) if result else None
+        except Exception as e:
+            logger.error(f"Failed to get current streamer status for {streamer_id}: {e}")
+            return None
+
+    async def _get_recent_activity_data(self, streamer_id: int) -> Optional[Dict]:
+        """Get recent activity data from the main monitoring system (worker_analytics table)."""
+        try:
+            async with self.database_service.transaction() as conn:
+                # Get the most recent worker_analytics data for this streamer
+                result = await conn.fetchrow("""
+                    SELECT current_viewers, assigned_viewers, humans, timestamp
+                    FROM worker_analytics
+                    WHERE streamer_id = $1
+                    ORDER BY timestamp DESC
+                    LIMIT 1
+                """, streamer_id)
+
+                if result:
+                    logger.debug(f"Found worker_analytics data for streamer {streamer_id}: viewers={result['current_viewers']}")
+                    return {
+                        'viewers': result['current_viewers'],
+                        'assigned_viewers': result['assigned_viewers'],
+                        'humans': result['humans'],
+                        'timestamp': result['timestamp']
+                    }
+
+                return None
+        except Exception as e:
+            logger.debug(f"Failed to get worker_analytics data for streamer {streamer_id}: {e}")
+            return None
 
     async def _get_assigned_user_count(self, streamer_id: int) -> int:
         """Get number of users assigned to this streamer."""

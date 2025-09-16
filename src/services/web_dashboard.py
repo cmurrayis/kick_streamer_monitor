@@ -2780,6 +2780,14 @@ class WebDashboardService:
                             yAxisID: 'y'
                         }},
                         {{
+                            label: 'Running Status',
+                            data: data.data.map(point => point.running ? 1 : 0),
+                            borderColor: '#ff9500',
+                            backgroundColor: 'rgba(255, 149, 0, 0.1)',
+                            tension: 0.1,
+                            yAxisID: 'y2'
+                        }},
+                        {{
                             label: 'Assigned Users',
                             data: data.data.map(point => point.assigned),
                             borderColor: '#00ccff',
@@ -2849,6 +2857,23 @@ class WebDashboardService:
                                 grid: {{
                                     drawOnChartArea: false,
                                     color: '#333333'
+                                }}
+                            }},
+                            y2: {{
+                                type: 'linear',
+                                display: false,
+                                min: 0,
+                                max: 1,
+                                title: {{
+                                    display: false,
+                                    text: 'Running Status',
+                                    color: '#ff9500'
+                                }},
+                                ticks: {{
+                                    display: false
+                                }},
+                                grid: {{
+                                    drawOnChartArea: false
                                 }}
                             }}
                         }},
@@ -3525,6 +3550,14 @@ class WebDashboardService:
                             yAxisID: 'y'
                         },
                         {
+                            label: 'Running Status',
+                            data: data.data.map(point => point.running ? 1 : 0),
+                            borderColor: '#ff9500',
+                            backgroundColor: 'rgba(255, 149, 0, 0.1)',
+                            tension: 0.1,
+                            yAxisID: 'y2'
+                        },
+                        {
                             label: 'Assigned Users',
                             data: data.data.map(point => point.assigned),
                             borderColor: '#00ccff',
@@ -3594,6 +3627,23 @@ class WebDashboardService:
                                 grid: {
                                     drawOnChartArea: false,
                                     color: '#333333'
+                                }
+                            },
+                            y2: {
+                                type: 'linear',
+                                display: false,
+                                min: 0,
+                                max: 1,
+                                title: {
+                                    display: false,
+                                    text: 'Running Status',
+                                    color: '#ff9500'
+                                },
+                                ticks: {
+                                    display: false
+                                },
+                                grid: {
+                                    drawOnChartArea: false
                                 }
                             }
                         },
