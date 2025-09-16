@@ -5057,53 +5057,38 @@ class WebDashboardService:
                     ORDER BY recorded_at ASC
                 """, streamer.id, start_time, end_time)
 
-            # Format data for Chart.js
-            labels = []
-            viewer_data = []
-            running_data = []
-            assigned_data = []
-
+            # Format data for Chart.js frontend
+            formatted_data = []
             for row in analytics_data:
-                # Format timestamp for chart labels
-                timestamp = row['recorded_at']
-                if period == '1hr':
-                    label = timestamp.strftime('%H:%M')
-                else:
-                    label = timestamp.strftime('%m/%d %H:%M')
+                formatted_data.append({
+                    'recorded_at': row['recorded_at'].isoformat(),
+                    'viewers': row['viewers'],
+                    'running': row['running'],
+                    'assigned': row['assigned'],
+                    'status': row['status']
+                })
 
-                labels.append(label)
-                viewer_data.append(row['viewers'])
-                running_data.append(1 if row['running'] else 0)
-                assigned_data.append(row['assigned'])
+            # Calculate navigation info - has_older_data means there is data before this period
+            # Check if there's data older than our start_time
+            async with self.database_service.transaction() as conn:
+                older_data_check = await conn.fetchval("""
+                    SELECT COUNT(*)
+                    FROM streamer_analytics
+                    WHERE streamer_id = $1 AND recorded_at < $2
+                    LIMIT 1
+                """, streamer.id, start_time)
 
-            # Calculate navigation info
-            has_previous = True  # Always allow going back in time
-            has_next = offset > 0  # Only allow going forward if we're not at current period
+            has_older_data = older_data_check > 0
 
             response_data = {
                 'streamer': streamer_username,
                 'period': period,
                 'offset': offset,
-                'start_time': start_time.isoformat(),
-                'end_time': end_time.isoformat(),
-                'labels': labels,
-                'datasets': {
-                    'viewers': viewer_data,
-                    'running': running_data,
-                    'assigned': assigned_data
-                },
-                'navigation': {
-                    'has_previous': has_previous,
-                    'has_next': has_next,
-                    'previous_offset': offset + 1,
-                    'next_offset': offset - 1 if offset > 0 else 0
-                },
-                'stats': {
-                    'total_points': len(analytics_data),
-                    'max_viewers': max(viewer_data) if viewer_data else 0,
-                    'avg_viewers': sum(viewer_data) // len(viewer_data) if viewer_data else 0,
-                    'online_percentage': (sum(running_data) / len(running_data) * 100) if running_data else 0
-                }
+                'period_start': start_time.strftime('%Y-%m-%d %H:%M:%S'),
+                'period_end': end_time.strftime('%Y-%m-%d %H:%M:%S'),
+                'data': formatted_data,
+                'has_older_data': has_older_data,
+                'total_points': len(analytics_data)
             }
 
             return Response(text=json.dumps(response_data, default=str), content_type='application/json')
