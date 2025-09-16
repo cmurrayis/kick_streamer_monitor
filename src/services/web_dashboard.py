@@ -2767,7 +2767,7 @@ class WebDashboardService:
                 container.innerHTML = '<canvas id="analytics-chart"></canvas>';
                 const ctx = document.getElementById('analytics-chart').getContext('2d');
 
-                // Prepare chart data
+                // Prepare chart data - all datasets use single y-axis for better readability
                 const chartData = {{
                     labels: data.data.map(point => new Date(point.recorded_at).toLocaleTimeString()),
                     datasets: [
@@ -2776,24 +2776,21 @@ class WebDashboardService:
                             data: data.data.map(point => point.viewers),
                             borderColor: '#00ff00',
                             backgroundColor: 'rgba(0, 255, 0, 0.1)',
-                            tension: 0.1,
-                            yAxisID: 'y'
+                            tension: 0.1
                         }},
                         {{
                             label: 'Running Status',
                             data: data.data.map(point => point.running ? 1 : 0),
                             borderColor: '#ff9500',
                             backgroundColor: 'rgba(255, 149, 0, 0.1)',
-                            tension: 0.1,
-                            yAxisID: 'y2'
+                            tension: 0.1
                         }},
                         {{
                             label: 'Assigned Users',
                             data: data.data.map(point => point.assigned),
                             borderColor: '#00ccff',
                             backgroundColor: 'rgba(0, 204, 255, 0.1)',
-                            tension: 0.1,
-                            yAxisID: 'y1'
+                            tension: 0.1
                         }}
                     ]
                 }};
@@ -2829,51 +2826,17 @@ class WebDashboardService:
                             y: {{
                                 type: 'linear',
                                 display: true,
-                                position: 'left',
+                                beginAtZero: true,
                                 title: {{
                                     display: true,
-                                    text: 'Viewers',
-                                    color: '#00ff00'
+                                    text: 'Count',
+                                    color: '#ffffff'
                                 }},
                                 ticks: {{
-                                    color: '#00ff00'
+                                    color: '#ffffff'
                                 }},
                                 grid: {{
                                     color: '#333333'
-                                }}
-                            }},
-                            y1: {{
-                                type: 'linear',
-                                display: true,
-                                position: 'right',
-                                title: {{
-                                    display: true,
-                                    text: 'Assigned Users',
-                                    color: '#00ccff'
-                                }},
-                                ticks: {{
-                                    color: '#00ccff'
-                                }},
-                                grid: {{
-                                    drawOnChartArea: false,
-                                    color: '#333333'
-                                }}
-                            }},
-                            y2: {{
-                                type: 'linear',
-                                display: false,
-                                min: 0,
-                                max: 1,
-                                title: {{
-                                    display: false,
-                                    text: 'Running Status',
-                                    color: '#ff9500'
-                                }},
-                                ticks: {{
-                                    display: false
-                                }},
-                                grid: {{
-                                    drawOnChartArea: false
                                 }}
                             }}
                         }},
@@ -3537,7 +3500,7 @@ class WebDashboardService:
                 container.innerHTML = '<canvas id="analytics-chart"></canvas>';
                 const ctx = document.getElementById('analytics-chart').getContext('2d');
 
-                // Prepare chart data
+                // Prepare chart data - all datasets use single y-axis for better readability
                 const chartData = {
                     labels: data.data.map(point => new Date(point.recorded_at).toLocaleTimeString()),
                     datasets: [
@@ -3546,24 +3509,21 @@ class WebDashboardService:
                             data: data.data.map(point => point.viewers),
                             borderColor: '#ff6600',
                             backgroundColor: 'rgba(255, 102, 0, 0.1)',
-                            tension: 0.1,
-                            yAxisID: 'y'
+                            tension: 0.1
                         },
                         {
                             label: 'Running Status',
                             data: data.data.map(point => point.running ? 1 : 0),
                             borderColor: '#ff9500',
                             backgroundColor: 'rgba(255, 149, 0, 0.1)',
-                            tension: 0.1,
-                            yAxisID: 'y2'
+                            tension: 0.1
                         },
                         {
                             label: 'Assigned Users',
                             data: data.data.map(point => point.assigned),
                             borderColor: '#00ccff',
                             backgroundColor: 'rgba(0, 204, 255, 0.1)',
-                            tension: 0.1,
-                            yAxisID: 'y1'
+                            tension: 0.1
                         }
                     ]
                 };
@@ -3599,51 +3559,17 @@ class WebDashboardService:
                             y: {
                                 type: 'linear',
                                 display: true,
-                                position: 'left',
+                                beginAtZero: true,
                                 title: {
                                     display: true,
-                                    text: 'Viewers',
-                                    color: '#ff6600'
+                                    text: 'Count',
+                                    color: '#ffffff'
                                 },
                                 ticks: {
-                                    color: '#ff6600'
+                                    color: '#ffffff'
                                 },
                                 grid: {
                                     color: '#333333'
-                                }
-                            },
-                            y1: {
-                                type: 'linear',
-                                display: true,
-                                position: 'right',
-                                title: {
-                                    display: true,
-                                    text: 'Assigned Users',
-                                    color: '#00ccff'
-                                },
-                                ticks: {
-                                    color: '#00ccff'
-                                },
-                                grid: {
-                                    drawOnChartArea: false,
-                                    color: '#333333'
-                                }
-                            },
-                            y2: {
-                                type: 'linear',
-                                display: false,
-                                min: 0,
-                                max: 1,
-                                title: {
-                                    display: false,
-                                    text: 'Running Status',
-                                    color: '#ff9500'
-                                },
-                                ticks: {
-                                    display: false
-                                },
-                                grid: {
-                                    drawOnChartArea: false
                                 }
                             }
                         },

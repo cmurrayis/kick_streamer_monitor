@@ -23,7 +23,8 @@
       "Bash(del test_snags_connection.py)",
       "Bash(journalctl:*)",
       "Bash(del apply_analytics_schema.py)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(wmic:*)"
     ],
     "deny": [],
     "ask": []

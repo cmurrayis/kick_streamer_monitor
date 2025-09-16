@@ -184,16 +184,10 @@ class ServiceCommands:
 
             print(f" Monitoring service started successfully")
 
-            # Start analytics service if not in manual mode
-            if mode != MonitoringMode.MANUAL:
-                print("Starting analytics collection service...")
-                self._analytics_service = AnalyticsService(
-                    database_service=db_service,
-                    oauth_service=oauth_service,
-                    collection_interval=60  # 1-minute intervals
-                )
-                await self._analytics_service.start()
-                print(" Analytics service started (1-minute intervals)")
+            # Analytics collection is now integrated into the main monitoring service
+            # The main monitor will populate both worker_analytics AND streamer_analytics
+            print("Analytics collection integrated into main monitoring service")
+            self._analytics_service = None  # No longer needed as separate service
             
             # Start web dashboard for daemon mode
             if daemon and enable_web_dashboard:

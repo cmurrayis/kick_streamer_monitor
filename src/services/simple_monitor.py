@@ -398,16 +398,18 @@ class SimpleMonitorService:
         """Log worker assignment analytics data for historical analysis."""
         try:
             async with self.database_service.get_connection() as conn:
-                query = """
+                now = datetime.now(timezone.utc)
+
+                # Log to worker_analytics (existing functionality)
+                worker_query = """
                 INSERT INTO worker_analytics (
                     streamer_id, timestamp, current_viewers, assigned_viewers, humans, logged_at
                 ) VALUES ($1, $2, $3, $4, $5, $6)
                 ON CONFLICT DO NOTHING
                 """
 
-                now = datetime.now(timezone.utc)
                 await conn.execute(
-                    query,
+                    worker_query,
                     streamer_id,
                     now,
                     current_viewers,
@@ -416,7 +418,32 @@ class SimpleMonitorService:
                     now
                 )
 
-                logger.debug(f"Logged worker analytics for streamer {streamer_id}: viewers={current_viewers}, assigned={assigned_viewers}, humans={humans}")
+                # Also log to streamer_analytics for graphing (NEW - eliminates separate analytics service)
+                # Round to minute boundary for consistent graphing
+                minute_timestamp = now.replace(second=0, microsecond=0)
+
+                analytics_query = """
+                INSERT INTO streamer_analytics (
+                    streamer_id, recorded_at, viewers, running, assigned, status
+                ) VALUES ($1, $2, $3, $4, $5, $6)
+                ON CONFLICT (streamer_id, recorded_at) DO UPDATE SET
+                    viewers = EXCLUDED.viewers,
+                    running = EXCLUDED.running,
+                    assigned = EXCLUDED.assigned,
+                    status = EXCLUDED.status
+                """
+
+                await conn.execute(
+                    analytics_query,
+                    streamer_id,
+                    minute_timestamp,
+                    current_viewers,
+                    current_viewers > 0,  # running = true if viewers > 0
+                    assigned_viewers,
+                    'online' if current_viewers > 0 else 'offline'
+                )
+
+                logger.debug(f"Logged analytics for streamer {streamer_id}: viewers={current_viewers}, assigned={assigned_viewers}, humans={humans}")
 
         except Exception as e:
             # Don't fail the main process if analytics logging fails
