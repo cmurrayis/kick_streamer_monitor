@@ -193,6 +193,11 @@ class WebDashboardService:
     async def _handle_api_status(self, request: Request) -> Response:
         """API endpoint for service status."""
         try:
+            # Check authentication
+            user_session = self._get_user_session(request)
+            if not user_session:
+                return Response(status=401, text="Unauthorized")
+
             if hasattr(self.monitor_service, 'get_monitoring_stats'):
                 stats = self.monitor_service.get_monitoring_stats()
             else:
@@ -213,6 +218,11 @@ class WebDashboardService:
     async def _handle_api_streamers(self, request: Request) -> Response:
         """API endpoint for streamer details."""
         try:
+            # Check authentication
+            user_session = self._get_user_session(request)
+            if not user_session:
+                return Response(status=401, text="Unauthorized")
+
             if hasattr(self.monitor_service, 'get_streamer_details'):
                 streamers = await self.monitor_service.get_streamer_details()
             else:
@@ -1544,6 +1554,11 @@ class WebDashboardService:
     async def _handle_api_dashboard_summary(self, request: Request) -> Response:
         """API endpoint for dashboard summary statistics."""
         try:
+            # Check authentication
+            user_session = self._get_user_session(request)
+            if not user_session:
+                return Response(status=401, text="Unauthorized")
+
             if not self.database_service:
                 return Response(status=503, text=json.dumps({"error": "Database service unavailable"}),
                               content_type='application/json')
@@ -1559,6 +1574,11 @@ class WebDashboardService:
     async def _handle_api_status_grid(self, request: Request) -> Response:
         """API endpoint for streamer status grid data."""
         try:
+            # Check authentication
+            user_session = self._get_user_session(request)
+            if not user_session:
+                return Response(status=401, text="Unauthorized")
+
             if not self.database_service:
                 return Response(status=503, text=json.dumps({"error": "Database service unavailable"}),
                               content_type='application/json')
@@ -1575,6 +1595,11 @@ class WebDashboardService:
     async def _handle_api_recent_activity(self, request: Request) -> Response:
         """API endpoint for recent activity feed."""
         try:
+            # Check authentication
+            user_session = self._get_user_session(request)
+            if not user_session:
+                return Response(status=401, text="Unauthorized")
+
             if not self.database_service:
                 return Response(status=503, text=json.dumps({"error": "Database service unavailable"}),
                               content_type='application/json')
@@ -1594,6 +1619,11 @@ class WebDashboardService:
     async def _handle_api_system_health(self, request: Request) -> Response:
         """API endpoint for system health metrics."""
         try:
+            # Check authentication
+            user_session = self._get_user_session(request)
+            if not user_session:
+                return Response(status=401, text="Unauthorized")
+
             if not self.database_service:
                 return Response(status=503, text=json.dumps({
                     "database_status": "disconnected",
@@ -1629,6 +1659,11 @@ class WebDashboardService:
     async def _handle_api_viewer_analytics(self, request: Request) -> Response:
         """API endpoint for viewer count analytics."""
         try:
+            # Check authentication
+            user_session = self._get_user_session(request)
+            if not user_session:
+                return Response(status=401, text="Unauthorized")
+
             if not self.database_service:
                 return Response(status=503, text=json.dumps({"error": "Database service unavailable"}),
                               content_type='application/json')
@@ -4990,6 +5025,11 @@ class WebDashboardService:
     async def _handle_analytics_graph(self, request: Request) -> Response:
         """API endpoint for analytics graph data."""
         try:
+            # Check authentication first
+            user_session = self._get_user_session(request)
+            if not user_session:
+                return Response(status=401, text="Unauthorized")
+
             # Get streamer username from URL path
             streamer_username = request.match_info.get('streamer_username')
             if not streamer_username:
@@ -5021,6 +5061,16 @@ class WebDashboardService:
             streamer = await self.database_service.get_streamer_by_username(streamer_username)
             if not streamer:
                 return Response(status=404, text="Streamer not found")
+
+            # Check user access permissions
+            from models.user import UserRole
+            if user_session.role != UserRole.ADMIN:
+                # Non-admin users can only access streamers assigned to them
+                user_assignments = await self.database_service.get_user_streamer_assignments(user_session.user_id)
+                assigned_streamer_ids = [assignment.streamer_id for assignment in user_assignments]
+
+                if streamer.id not in assigned_streamer_ids:
+                    return Response(status=403, text="Access denied: Streamer not assigned to your account")
 
             # Query analytics data from database
             async with self.database_service.transaction() as conn:
