@@ -2029,9 +2029,9 @@ class WebDashboardService:
                 # Generate profile picture HTML
                 profile_url = getattr(streamer, 'profile_picture_url', None)
                 if profile_url and profile_url.strip():
-                    profile_pic = f'<img src="{profile_url}" alt="{streamer.username}" style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid #00ff00; object-fit: cover;">'
+                    profile_pic = f'<img src="{profile_url}" alt="{streamer.username}" style="width: 48px; height: 48px; border-radius: 50%; border: 2px solid #00ff00; object-fit: cover; display: block; margin: 0 auto;">'
                 else:
-                    profile_pic = f'<div style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid #00ff00; background: #003300; display: flex; align-items: center; justify-content: center; color: #00ff00; font-size: 12px;">{streamer.username[0].upper()}</div>'
+                    profile_pic = f'<div style="width: 48px; height: 48px; border-radius: 50%; border: 2px solid #00ff00; background: #003300; display: flex; align-items: center; justify-content: center; color: #00ff00; font-size: 16px; margin: 0 auto;">{streamer.username[0].upper()}</div>'
 
                 streamer_rows += f'''
                     <tr data-streamer-id="{streamer.id}">
@@ -2170,9 +2170,10 @@ class WebDashboardService:
         .status-offline {{ color: #ff6666; }}
         .status-unknown {{ color: #ffff00; }}
         .profile-pic-column {{
-            width: 50px;
+            width: 60px;
             text-align: center;
-            padding: 8px;
+            padding: 4px;
+            vertical-align: middle;
         }}
         .viewer-count {{
             color: #00ccff;
@@ -2665,9 +2666,10 @@ class WebDashboardService:
         .status-offline { color: #ff6600; }
         .status-unknown { color: #666666; }
         .profile-pic-column {
-            width: 50px;
+            width: 60px;
             text-align: center;
-            padding: 8px;
+            padding: 4px;
+            vertical-align: middle;
         }
         .success-message, .error-message {
             padding: 10px;
@@ -2779,8 +2781,8 @@ class WebDashboardService:
                         new Date(streamer.last_status_update).toLocaleString() : 'Never';
                     
                     const profilePicture = streamer.profile_picture_url ?
-                        `<img src="${streamer.profile_picture_url}" alt="${streamer.username}" style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid #ff6600; object-fit: cover;">` :
-                        `<div style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid #ff6600; background: #0a0a0a; display: flex; align-items: center; justify-content: center; color: #ff6600; font-size: 12px;">${streamer.username.charAt(0).toUpperCase()}</div>`;
+                        `<img src="${streamer.profile_picture_url}" alt="${streamer.username}" style="width: 48px; height: 48px; border-radius: 50%; border: 2px solid #ff6600; object-fit: cover; display: block; margin: 0 auto;">` :
+                        `<div style="width: 48px; height: 48px; border-radius: 50%; border: 2px solid #ff6600; background: #0a0a0a; display: flex; align-items: center; justify-content: center; color: #ff6600; font-size: 16px; margin: 0 auto;">${streamer.username.charAt(0).toUpperCase()}</div>`;
 
                     return `
                         <tr>
