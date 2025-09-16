@@ -1986,11 +1986,19 @@ class WebDashboardService:
             streamer_ids = [a.streamer_id for a in assignments]
             
             if streamer_ids:
-                # Get streamers data
+                # Get streamers data with worker assignments
+                all_streamers = await self.database_service.get_active_streamers_with_assigned_viewers()
+                # Filter to only assigned streamers
                 streamers = []
-                for streamer_id in streamer_ids:
-                    streamer = await self.database_service.get_streamer_by_id(streamer_id)
-                    if streamer:
+                for streamer_data in all_streamers:
+                    if streamer_data['id'] in streamer_ids:
+                        # Convert dict back to Streamer object for compatibility
+                        from models.streamer import Streamer
+                        streamer = Streamer(**{k: v for k, v in streamer_data.items() if k in Streamer.__fields__})
+                        # Add the worker data as attributes
+                        streamer.running_workers = streamer_data.get('running_workers', 0)
+                        streamer.assigned_capacity = streamer_data.get('assigned_capacity', 0)
+                        streamer.humans = streamer_data.get('humans', 0)
                         streamers.append(streamer)
             else:
                 streamers = []
@@ -2033,12 +2041,33 @@ class WebDashboardService:
                 else:
                     profile_pic = f'<div style="width: 48px; height: 48px; border-radius: 50%; border: 2px solid #00ff00; background: #003300; display: flex; align-items: center; justify-content: center; color: #00ff00; font-size: 16px; margin: 0 auto;">{streamer.username[0].upper()}</div>'
 
+                # Get worker data from streamer attributes (already loaded)
+                running_display = "-"
+                assigned_display = "-"
+                humans_display = "-"
+
+                if streamer.status.value != 'offline':
+                    # Only show worker data for online streamers
+                    running_workers = getattr(streamer, 'running_workers', 0)
+                    assigned_capacity = getattr(streamer, 'assigned_capacity', 0)
+                    humans = getattr(streamer, 'humans', 0)
+
+                    if running_workers > 0:
+                        running_display = f"{running_workers:,}"
+                    if assigned_capacity > 0:
+                        assigned_display = f"{assigned_capacity:,}"
+                    if humans >= 0:
+                        humans_display = f"{humans:,}"
+
                 streamer_rows += f'''
                     <tr data-streamer-id="{streamer.id}">
                         <td class="profile-pic-column">{profile_pic}</td>
                         <td>{streamer.username}</td>
                         <td class="{status_class} streamer-status">{streamer.status.upper()}</td>
                         <td class="viewer-count">{viewer_display}</td>
+                        <td class="running-count">{running_display}</td>
+                        <td class="assigned-count">{assigned_display}</td>
+                        <td class="humans-count">{humans_display}</td>
                         <td class="last-seen">{last_seen}</td>
                         <td class="last-update">{last_update}</td>
                     </tr>
