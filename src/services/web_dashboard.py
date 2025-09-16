@@ -2779,8 +2779,8 @@ class WebDashboardService:
                             tension: 0.1
                         }},
                         {{
-                            label: 'Running Status',
-                            data: data.data.map(point => point.running ? 1 : 0),
+                            label: 'Running Workers',
+                            data: data.data.map(point => point.running),
                             borderColor: '#ff9500',
                             backgroundColor: 'rgba(255, 149, 0, 0.1)',
                             tension: 0.1
@@ -3512,8 +3512,8 @@ class WebDashboardService:
                             tension: 0.1
                         },
                         {
-                            label: 'Running Status',
-                            data: data.data.map(point => point.running ? 1 : 0),
+                            label: 'Running Workers',
+                            data: data.data.map(point => point.running),
                             borderColor: '#ff9500',
                             backgroundColor: 'rgba(255, 149, 0, 0.1)',
                             tension: 0.1
@@ -5025,7 +5025,7 @@ class WebDashboardService:
             # Query analytics data from database
             async with self.database_service.transaction() as conn:
                 analytics_data = await conn.fetch("""
-                    SELECT recorded_at, viewers, running, assigned, status
+                    SELECT recorded_at, viewers, running, assigned, status, running_workers
                     FROM streamer_analytics
                     WHERE streamer_id = $1
                       AND recorded_at >= $2
@@ -5039,7 +5039,7 @@ class WebDashboardService:
                 formatted_data.append({
                     'recorded_at': row['recorded_at'].isoformat(),
                     'viewers': row['viewers'],
-                    'running': row['running'],
+                    'running': row['running_workers'] if row['running_workers'] is not None else 0,
                     'assigned': row['assigned'],
                     'status': row['status']
                 })

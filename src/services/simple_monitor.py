@@ -424,13 +424,14 @@ class SimpleMonitorService:
 
                 analytics_query = """
                 INSERT INTO streamer_analytics (
-                    streamer_id, recorded_at, viewers, running, assigned, status
-                ) VALUES ($1, $2, $3, $4, $5, $6)
+                    streamer_id, recorded_at, viewers, running, assigned, status, running_workers
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7)
                 ON CONFLICT (streamer_id, recorded_at) DO UPDATE SET
                     viewers = EXCLUDED.viewers,
                     running = EXCLUDED.running,
                     assigned = EXCLUDED.assigned,
-                    status = EXCLUDED.status
+                    status = EXCLUDED.status,
+                    running_workers = EXCLUDED.running_workers
                 """
 
                 await conn.execute(
@@ -438,9 +439,10 @@ class SimpleMonitorService:
                     streamer_id,
                     minute_timestamp,
                     current_viewers,
-                    current_viewers > 0,  # running = true if viewers > 0
-                    assigned_viewers,
-                    'online' if current_viewers > 0 else 'offline'
+                    current_viewers > 0,  # running = boolean (keep for compatibility)
+                    assigned_viewers,     # assigned = total assigned workers
+                    'online' if current_viewers > 0 else 'offline',
+                    assigned_viewers      # running_workers = actual running worker count
                 )
 
                 logger.debug(f"Logged analytics for streamer {streamer_id}: viewers={current_viewers}, assigned={assigned_viewers}, humans={humans}")

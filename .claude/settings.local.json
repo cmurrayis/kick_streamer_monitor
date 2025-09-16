@@ -24,7 +24,8 @@
       "Bash(journalctl:*)",
       "Bash(del apply_analytics_schema.py)",
       "Bash(timeout:*)",
-      "Bash(wmic:*)"
+      "Bash(wmic:*)",
+      "Bash(netstat:*)"
     ],
     "deny": [],
     "ask": []
