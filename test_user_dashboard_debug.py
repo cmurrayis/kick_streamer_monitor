@@ -16,10 +16,9 @@ load_dotenv()
 # Add the src directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
-from services.database import DatabaseService
+from services.database import DatabaseService, DatabaseConfig
 from services.snags_database import SnagsDatabaseService
 from models.streamer import Streamer
-from models.config import DatabaseConfig
 import logging
 
 # Set up logging
