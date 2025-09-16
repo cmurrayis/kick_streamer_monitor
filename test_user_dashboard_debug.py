@@ -8,6 +8,10 @@ Run this on your server to help identify where the streamer list becomes empty.
 import asyncio
 import sys
 import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Add the src directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
@@ -15,6 +19,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 from services.database import DatabaseService
 from services.snags_database import SnagsDatabaseService
 from models.streamer import Streamer
+from models.config import DatabaseConfig
 import logging
 
 # Set up logging
@@ -24,8 +29,17 @@ logger = logging.getLogger(__name__)
 async def test_user_dashboard_logic():
     """Test the user dashboard logic step by step."""
 
+    # Initialize database config
+    db_config = DatabaseConfig(
+        host=os.getenv('DATABASE_HOST', 'localhost'),
+        port=int(os.getenv('DATABASE_PORT', 5432)),
+        user=os.getenv('DATABASE_USER'),
+        password=os.getenv('DATABASE_PASSWORD'),
+        database=os.getenv('DATABASE_NAME', 'kick_monitor')
+    )
+
     # Initialize services
-    db_service = DatabaseService()
+    db_service = DatabaseService(db_config)
     await db_service.connect()
 
     # Test with user cameron (ID should be 1 or 2 based on previous conversation)
