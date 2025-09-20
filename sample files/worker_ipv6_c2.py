@@ -634,6 +634,13 @@ class IPv6Bot:
                         logger_mgr.info(f"WebSocket tasks completed for channel {channel_id}")
                         return  # Success - exit retry loop
 
+                except (ConnectionClosed, websockets.exceptions.ConnectionClosedError) as e:
+                    logger_mgr.warning(f"WebSocket connection closed: {e}")
+                    raise
+                except Exception as e:
+                    logger_mgr.error(f"WebSocket error: {e}", exc_info=self.debug)
+                    raise
+
             except asyncio.TimeoutError as e:
                 self.open_sockets -= 1
                 logger_mgr.warning(f"WebSocket timeout (attempt {retry_attempt + 1}/{max_ws_retries}): {e}")
