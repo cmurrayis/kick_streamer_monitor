@@ -322,14 +322,17 @@ class IPv6Bot:
                 logger_mgr.debug("Waiting to acquire IPv6 from pool...")
                 ipv6_address = await self.ipv6_pool.acquire()
                 if not ipv6_address:
-                    logger_mgr.error("Failed to acquire IPv6 address")
-                    await asyncio.sleep(5)
+                    logger_mgr.error("Failed to acquire IPv6 address - pool may be exhausted")
+                    logger_mgr.info(f"Pool stats: {self.ipv6_pool.stats()}")
+                    await asyncio.sleep(30)  # Wait longer if pool is exhausted
                     continue
 
                 self.active_sessions += 1
 
                 try:
-                    logger_mgr.debug(f"Acquired IPv6 {ipv6_address}. Starting session for '{self.streamer_name}'.")
+                    logger_mgr.info(f"Thread {manager_id} acquired unique IPv6: {ipv6_address} for '{self.streamer_name}'")
+                    # Add small random delay to avoid thundering herd
+                    await asyncio.sleep(random.uniform(0.5, 2.0))
                     await self._execute_viewer_simulation(ipv6_address, logger_mgr)
                 except asyncio.CancelledError:
                     raise
@@ -367,9 +370,12 @@ class IPv6Bot:
                 if sock.family == socket.AF_INET6 and sock.type == socket.SOCK_STREAM:
                     sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
                     sock.bind((ipv6_address, 0))
-                    logger_mgr.debug(f"Bound socket to IPv6: {ipv6_address}")
+                    # Only log first binding to reduce log spam
+                    if not hasattr(bound_socket, 'logged'):
+                        logger_mgr.info(f"Thread bound to IPv6: {ipv6_address}")
+                        bound_socket.logged = True
             except OSError as e:
-                if e.errno != 22:
+                if e.errno != 22:  # Ignore "already bound" errors
                     logger_mgr.debug(f"Could not bind IPv6: {e}")
             except Exception:
                 pass
@@ -637,6 +643,20 @@ class IPv6Bot:
                 except (ConnectionClosed, websockets.exceptions.ConnectionClosedError) as e:
                     logger_mgr.warning(f"WebSocket connection closed: {e}")
                     raise
+                except websockets.exceptions.InvalidStatus as e:
+                    # Handle HTTP 429 (Too Many Requests) specifically
+                    if hasattr(e, 'status_code') and e.status_code == 429:
+                        logger_mgr.warning(f"HTTP 429 Rate limited - will retry with backoff")
+                        # Extract Retry-After header if available
+                        retry_after = 10  # Default 10 seconds
+                        if hasattr(e, 'headers') and 'Retry-After' in e.headers:
+                            retry_after = int(e.headers['Retry-After'])
+                        logger_mgr.info(f"Waiting {retry_after} seconds before retry (Cloudflare rate limit)")
+                        await asyncio.sleep(retry_after + random.uniform(1, 3))  # Add jitter
+                        raise  # Re-raise to trigger retry logic
+                    else:
+                        logger_mgr.error(f"WebSocket handshake failed: {e}")
+                        raise
                 except Exception as e:
                     logger_mgr.error(f"WebSocket error: {e}", exc_info=self.debug)
                     raise
@@ -662,6 +682,21 @@ class IPv6Bot:
                     raise
 
                 await asyncio.sleep(base_retry_delay)
+
+            except websockets.exceptions.InvalidStatus as e:
+                self.open_sockets -= 1
+                # Special handling for HTTP 429
+                if hasattr(e, 'status_code') and e.status_code == 429:
+                    logger_mgr.warning(f"HTTP 429 on attempt {retry_attempt + 1}/{max_ws_retries}")
+                    # Use longer delay for rate limiting
+                    retry_delay = 10 + (retry_attempt * 5) + random.uniform(0, 5)
+                    logger_mgr.info(f"Rate limited - waiting {retry_delay:.1f}s before retry")
+                    await asyncio.sleep(retry_delay)
+                else:
+                    logger_mgr.error(f"WebSocket error for channel {channel_id}: {e}", exc_info=self.debug)
+                    if retry_attempt + 1 >= max_ws_retries:
+                        raise
+                    await asyncio.sleep(base_retry_delay)
 
             except Exception as e:
                 self.open_sockets -= 1
