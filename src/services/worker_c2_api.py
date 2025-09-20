@@ -56,13 +56,13 @@ class WorkerC2API:
                 return web.json_response({'error': 'hostname required'}, status=400)
 
             # Check if hostname exists in worker table
-            async with self.database_service.snags_service.get_connection() as conn:
-                query = "SELECT hostname FROM worker WHERE hostname = $1"
-                result = await conn.fetchval(query, hostname)
+            # Use the connection pool directly
+            query = "SELECT hostname FROM worker WHERE hostname = $1"
+            result = await self.database_service.snags_service._connection_pool.fetchval(query, hostname)
 
-                if not result:
-                    logger.warning(f"Unknown hostname attempted login: {hostname}")
-                    return web.json_response({'error': 'Invalid hostname'}, status=403)
+            if not result:
+                logger.warning(f"Unknown hostname attempted login: {hostname}")
+                return web.json_response({'error': 'Invalid hostname'}, status=403)
 
             # Generate JWT token
             payload = {
@@ -128,13 +128,12 @@ class WorkerC2API:
                 return web.json_response({'error': 'Unauthorized'}, status=401)
 
             # Get worker assignment from snags database
-            async with self.database_service.snags_service.get_connection() as snags_conn:
-                worker_query = """
-                SELECT target, count, str_status, wrk_status
-                FROM worker
-                WHERE hostname = $1
-                """
-                worker_record = await snags_conn.fetchrow(worker_query, hostname)
+            worker_query = """
+            SELECT target, count, str_status, wrk_status
+            FROM worker
+            WHERE hostname = $1
+            """
+            worker_record = await self.database_service.snags_service._connection_pool.fetchrow(worker_query, hostname)
 
                 if not worker_record:
                     logger.warning(f"No assignment found for hostname: {hostname}")
@@ -233,21 +232,20 @@ class WorkerC2API:
                 })
 
             # Update worker statistics in database using existing columns
-            async with self.database_service.snags_service.get_connection() as conn:
-                update_query = """
-                UPDATE worker
-                SET wrk_count = $1,
-                    wrk_status = $2,
-                    updated_at = $3
-                WHERE hostname = $4
-                """
-                await conn.execute(
-                    update_query,
-                    workers,
-                    status.lower(),  # Convert "Online" to "online" for wrk_status
-                    datetime.now(timezone.utc),
-                    hostname
-                )
+            update_query = """
+            UPDATE worker
+            SET wrk_count = $1,
+                wrk_status = $2,
+                updated_at = $3
+            WHERE hostname = $4
+            """
+            await self.database_service.snags_service._connection_pool.execute(
+                update_query,
+                workers,
+                status.lower(),  # Convert "Online" to "online" for wrk_status
+                datetime.now(timezone.utc),
+                hostname
+            )
 
             logger.debug(f"State update from {hostname}: {status} with {workers} workers")
             return web.json_response({'success': True})
@@ -275,15 +273,18 @@ class WorkerC2API:
                 self.worker_sessions[hostname]['active_workers'] = 0
 
             # Clear worker count in database
-            async with self.database_service.snags_service.get_connection() as conn:
-                update_query = """
-                UPDATE worker
-                SET wrk_count = 0,
-                    wrk_status = 'offline',
-                    updated_at = $1
-                WHERE hostname = $2
-                """
-                await conn.execute(update_query, datetime.now(timezone.utc), hostname)
+            update_query = """
+            UPDATE worker
+            SET wrk_count = 0,
+                wrk_status = 'offline',
+                updated_at = $1
+            WHERE hostname = $2
+            """
+            await self.database_service.snags_service._connection_pool.execute(
+                update_query,
+                datetime.now(timezone.utc),
+                hostname
+            )
 
             logger.info(f"Released resources for worker: {hostname}")
             return web.json_response({'success': True})
