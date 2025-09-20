@@ -173,13 +173,8 @@ class KickOAuthService:
             }
         )
         
-        # Initialize browser fallback if enabled
-        if self.enable_browser_fallback:
-            self._browser_client = BrowserAPIClient(headless=True)
-            await self._browser_client.start()
-            logger.info("OAuth service started with browser fallback")
-        else:
-            logger.info("OAuth service started")
+        # Browser fallback will be initialized lazily when needed
+        logger.info(f"OAuth service started (browser fallback: {'available' if self.enable_browser_fallback else 'disabled'})")
     
     async def close(self) -> None:
         """Close the OAuth service."""
@@ -510,13 +505,21 @@ class KickOAuthService:
     
     async def _get_channel_info_browser(self, username: str) -> Dict[str, Any]:
         """Get channel info using browser automation."""
+        # Initialize browser client lazily on first use
         if not self._browser_client:
-            raise AuthenticationError("Browser client not initialized")
-        
+            logger.info("Initializing browser client for Cloudflare bypass...")
+            try:
+                from .browser_client import BrowserAPIClient
+                self._browser_client = BrowserAPIClient(headless=True)
+                await self._browser_client.start()
+            except Exception as e:
+                logger.error(f"Failed to initialize browser client: {e}")
+                raise AuthenticationError(f"Browser client initialization failed: {e}")
+
         data = await self._browser_client.fetch_channel_data(username)
         if not data:
             raise AuthenticationError(f"Browser failed to fetch data for {username}")
-        
+
         return data
     
     async def test_authentication(self) -> Dict[str, Any]:

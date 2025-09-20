@@ -25,7 +25,9 @@
       "Bash(del apply_analytics_schema.py)",
       "Bash(timeout:*)",
       "Bash(wmic:*)",
-      "Bash(netstat:*)"
+      "Bash(netstat:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []
