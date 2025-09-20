@@ -312,6 +312,12 @@ class IPv6Bot:
                     await asyncio.sleep(15)
                     continue
 
+                # Rate limit WebSocket connections to avoid overwhelming the network
+                # If we have too many open sockets, wait before creating new ones
+                while self.open_sockets >= self.required_workers * 0.9:  # Keep 10% buffer
+                    logger_mgr.debug(f"Connection throttling: {self.open_sockets}/{self.required_workers} sockets open")
+                    await asyncio.sleep(2)
+
                 # Acquire IPv6 address from pool
                 logger_mgr.debug("Waiting to acquire IPv6 from pool...")
                 ipv6_address = await self.ipv6_pool.acquire()
@@ -465,154 +471,187 @@ class IPv6Bot:
 
 
     async def _handle_websocket_heartbeat(self, channel_id, livestream_id, token, ipv6_address, logger_mgr):
-        """Handle WebSocket connection with IPv6 binding"""
+        """Handle WebSocket connection with IPv6 binding and retry logic"""
         ws_url = f"wss://websockets.kick.com/viewer/v1/connect?token={token}"
+        max_ws_retries = 3
+        base_retry_delay = 2
 
-        try:
-            self.open_sockets += 1
-            logger_mgr.debug(f"Connecting to WebSocket for channel {channel_id} via IPv6 {ipv6_address}")
-
-            # Monkey-patch socket creation for IPv6 binding
-            import functools
-            original_socket = socket.socket
-
-            def bound_socket(*args, **kwargs):
-                # Create the socket normally
-                sock = original_socket(*args, **kwargs)
-
-                # Only attempt to bind if:
-                # 1. This is an IPv6 socket (family == AF_INET6)
-                # 2. This is a TCP socket (type == SOCK_STREAM)
-                # 3. We have a valid IPv6 address to bind to
-                try:
-                    if sock.family == socket.AF_INET6 and sock.type == socket.SOCK_STREAM:
-                        sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
-                        sock.bind((ipv6_address, 0))
-                        # Only log successful binds at debug level
-                        logger_mgr.debug(f"Bound WebSocket to IPv6: {ipv6_address}")
-                except OSError as e:
-                    # Errno 22 (Invalid argument) happens when the socket is already bound
-                    # or when trying to bind incompatible address types
-                    if e.errno != 22:  # Only log non-"Invalid argument" errors
-                        logger_mgr.debug(f"Could not bind IPv6: {e}")
-                except Exception:
-                    # Silently ignore other binding errors
-                    pass
-
-                return sock
-
-            # Temporarily replace socket.socket
-            socket.socket = bound_socket
-
+        for retry_attempt in range(max_ws_retries):
             try:
-                # Connect WebSocket (headers set via monkey-patching)
-                # Note: Can't use extra_headers with monkey-patched socket
-                async with websockets.connect(
-                    ws_url,
-                    ping_interval=20,
-                    ping_timeout=20
-                ) as websocket:
-                    logger_mgr.info(f"WebSocket connected for channel ID {channel_id}")
+                self.open_sockets += 1
+                logger_mgr.debug(f"WebSocket connection attempt {retry_attempt + 1}/{max_ws_retries} for channel {channel_id}")
 
-                    # Send initial handshake
-                    initial_handshake = {
-                        "type": "channel_handshake",
-                        "data": {"message": {"channelId": str(channel_id)}}
-                    }
-                    await websocket.send(json.dumps(initial_handshake))
-                    logger_mgr.debug("Sent initial channel handshake")
+                # Monkey-patch socket creation for IPv6 binding
+                import functools
+                original_socket = socket.socket
 
-                    # Send initial ping
-                    await websocket.send(json.dumps({"type": "ping"}))
-                    logger_mgr.debug("Sent initial ping")
+                def bound_socket(*args, **kwargs):
+                    # Create the socket normally
+                    sock = original_socket(*args, **kwargs)
 
-                    async def receive_handler():
-                        """Handle incoming messages"""
-                        try:
-                            async for message in websocket:
-                                if self.debug:
-                                    logger_mgr.debug(f"Received: {message[:200]}")
+                    # Only attempt to bind if:
+                    # 1. This is an IPv6 socket (family == AF_INET6)
+                    # 2. This is a TCP socket (type == SOCK_STREAM)
+                    # 3. We have a valid IPv6 address to bind to
+                    try:
+                        if sock.family == socket.AF_INET6 and sock.type == socket.SOCK_STREAM:
+                            sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+                            sock.bind((ipv6_address, 0))
+                            # Only log successful binds at debug level
+                            logger_mgr.debug(f"Bound WebSocket to IPv6: {ipv6_address}")
+                    except OSError as e:
+                        # Errno 22 (Invalid argument) happens when the socket is already bound
+                        # or when trying to bind incompatible address types
+                        if e.errno != 22:  # Only log non-"Invalid argument" errors
+                            logger_mgr.debug(f"Could not bind IPv6: {e}")
+                    except Exception:
+                        # Silently ignore other binding errors
+                        pass
+
+                    return sock
+
+                # Temporarily replace socket.socket
+                socket.socket = bound_socket
+
+                try:
+                    # Connect WebSocket with increased timeout and retry logic
+                    async with websockets.connect(
+                        ws_url,
+                        ping_interval=20,
+                        ping_timeout=20,
+                        open_timeout=30,  # Increase from default 10s to 30s
+                        close_timeout=10
+                    ) as websocket:
+                        logger_mgr.info(f"WebSocket connected for channel ID {channel_id}")
+
+                        # Send initial handshake
+                        initial_handshake = {
+                            "type": "channel_handshake",
+                            "data": {"message": {"channelId": str(channel_id)}}
+                        }
+                        await websocket.send(json.dumps(initial_handshake))
+                        logger_mgr.debug("Sent initial channel handshake")
+
+                        # Send initial ping
+                        await websocket.send(json.dumps({"type": "ping"}))
+                        logger_mgr.debug("Sent initial ping")
+
+                        async def receive_handler():
+                            """Handle incoming messages"""
+                            try:
+                                async for message in websocket:
+                                    if self.debug:
+                                        logger_mgr.debug(f"Received: {message[:200]}")
+                                    try:
+                                        data = json.loads(message)
+                                        if data.get('type') == 'pong':
+                                            logger_mgr.debug("Received pong")
+                                    except json.JSONDecodeError:
+                                        logger_mgr.warning(f"Could not decode: {message[:200]}")
+                            except ConnectionClosed:
+                                logger_mgr.debug("Receive handler: connection closed")
+                            except Exception as e:
+                                logger_mgr.error(f"Receive handler error: {e}")
+
+                        async def periodic_handshake():
+                            """Send handshakes every 15 seconds"""
+                            msg = {"type": "channel_handshake", "data": {"message": {"channelId": str(channel_id)}}}
+                            while True:
+                                await asyncio.sleep(15)
+                                if not self.is_online:
+                                    break
                                 try:
-                                    data = json.loads(message)
-                                    if data.get('type') == 'pong':
-                                        logger_mgr.debug("Received pong")
-                                except json.JSONDecodeError:
-                                    logger_mgr.warning(f"Could not decode: {message[:200]}")
-                        except ConnectionClosed:
-                            logger_mgr.debug("Receive handler: connection closed")
-                        except Exception as e:
-                            logger_mgr.error(f"Receive handler error: {e}")
+                                    await websocket.send(json.dumps(msg))
+                                    logger_mgr.debug("Sent periodic handshake")
+                                except (ConnectionClosed, Exception) as e:
+                                    logger_mgr.debug(f"Handshake loop ending: {e}")
+                                    break
 
-                    async def periodic_handshake():
-                        """Send handshakes every 15 seconds"""
-                        msg = {"type": "channel_handshake", "data": {"message": {"channelId": str(channel_id)}}}
-                        while True:
-                            await asyncio.sleep(15)
-                            if not self.is_online:
-                                break
-                            try:
-                                await websocket.send(json.dumps(msg))
-                                logger_mgr.debug("Sent periodic handshake")
-                            except (ConnectionClosed, Exception) as e:
-                                logger_mgr.debug(f"Handshake loop ending: {e}")
-                                break
+                        async def periodic_ping():
+                            """Send pings every 30 seconds"""
+                            while True:
+                                await asyncio.sleep(30)
+                                if not self.is_online:
+                                    break
+                                try:
+                                    await websocket.send(json.dumps({"type": "ping"}))
+                                    logger_mgr.debug("Sent periodic ping")
+                                except (ConnectionClosed, Exception) as e:
+                                    logger_mgr.debug(f"Ping loop ending: {e}")
+                                    break
 
-                    async def periodic_ping():
-                        """Send pings every 30 seconds"""
-                        while True:
-                            await asyncio.sleep(30)
-                            if not self.is_online:
-                                break
-                            try:
-                                await websocket.send(json.dumps({"type": "ping"}))
-                                logger_mgr.debug("Sent periodic ping")
-                            except (ConnectionClosed, Exception) as e:
-                                logger_mgr.debug(f"Ping loop ending: {e}")
-                                break
-
-                    async def tracking_event():
-                        """Send tracking event every 2 minutes (critical for viewer count!)"""
-                        while True:
-                            await asyncio.sleep(120)  # 2 minutes
-                            if not self.is_online:
-                                break
-                            try:
-                                if livestream_id:
-                                    tracking_msg = {
-                                        "type": "user_event",
-                                        "data": {
-                                            "message": {
-                                                "name": "tracking.user.watch.livestream",
-                                                "channel_id": int(channel_id),
-                                                "livestream_id": int(livestream_id)
+                        async def tracking_event():
+                            """Send tracking event every 2 minutes (critical for viewer count!)"""
+                            while True:
+                                await asyncio.sleep(120)  # 2 minutes
+                                if not self.is_online:
+                                    break
+                                try:
+                                    if livestream_id:
+                                        tracking_msg = {
+                                            "type": "user_event",
+                                            "data": {
+                                                "message": {
+                                                    "name": "tracking.user.watch.livestream",
+                                                    "channel_id": int(channel_id),
+                                                    "livestream_id": int(livestream_id)
+                                                }
                                             }
                                         }
-                                    }
-                                    await websocket.send(json.dumps(tracking_msg))
-                                    logger_mgr.debug(f"Sent tracking event for livestream {livestream_id}")
-                            except (ConnectionClosed, Exception) as e:
-                                logger_mgr.debug(f"Tracking loop ending: {e}")
-                                break
+                                        await websocket.send(json.dumps(tracking_msg))
+                                        logger_mgr.debug(f"Sent tracking event for livestream {livestream_id}")
+                                except (ConnectionClosed, Exception) as e:
+                                    logger_mgr.debug(f"Tracking loop ending: {e}")
+                                    break
 
-                    # Run all tasks concurrently
-                    await asyncio.gather(
-                        receive_handler(),
-                        periodic_handshake(),
-                        periodic_ping(),
-                        tracking_event()  # This is critical for being counted!
-                    )
+                        # Run all tasks concurrently
+                        await asyncio.gather(
+                            receive_handler(),
+                            periodic_handshake(),
+                            periodic_ping(),
+                            tracking_event()  # This is critical for being counted!
+                        )
 
-                    logger_mgr.info(f"WebSocket tasks completed for channel {channel_id}")
-            finally:
-                # Restore original socket
-                socket.socket = original_socket
+                        logger_mgr.info(f"WebSocket tasks completed for channel {channel_id}")
+                        return  # Success - exit retry loop
 
-        except Exception as e:
-            logger_mgr.error(f"WebSocket error for channel {channel_id}: {e}", exc_info=self.debug)
-            raise
-        finally:
-            self.open_sockets -= 1
-            logger_mgr.debug(f"Decremented open sockets to {self.open_sockets}")
+                finally:
+                    # Restore original socket
+                    socket.socket = original_socket
+
+            except asyncio.TimeoutError as e:
+                self.open_sockets -= 1
+                logger_mgr.warning(f"WebSocket timeout (attempt {retry_attempt + 1}/{max_ws_retries}): {e}")
+
+                if retry_attempt + 1 >= max_ws_retries:
+                    logger_mgr.error(f"Max WebSocket retries reached for channel {channel_id}")
+                    raise
+
+                # Exponential backoff with jitter
+                retry_delay = base_retry_delay * (2 ** retry_attempt) + random.uniform(0, 2)
+                logger_mgr.info(f"Retrying WebSocket connection in {retry_delay:.1f} seconds...")
+                await asyncio.sleep(retry_delay)
+
+            except (ConnectionClosed, websockets.exceptions.ConnectionClosedError) as e:
+                self.open_sockets -= 1
+                logger_mgr.warning(f"WebSocket closed (attempt {retry_attempt + 1}/{max_ws_retries}): {e}")
+
+                if retry_attempt + 1 >= max_ws_retries:
+                    raise
+
+                await asyncio.sleep(base_retry_delay)
+
+            except Exception as e:
+                self.open_sockets -= 1
+                logger_mgr.error(f"WebSocket error for channel {channel_id}: {e}", exc_info=self.debug)
+
+                if retry_attempt + 1 >= max_ws_retries:
+                    raise
+
+                await asyncio.sleep(base_retry_delay)
+
+        # If we get here, all retries failed
+        logger_mgr.error(f"All WebSocket connection attempts failed for channel {channel_id}")
 
     async def _shutdown(self):
         """Shutdown all workers cleanly"""
