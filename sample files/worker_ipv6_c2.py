@@ -593,7 +593,7 @@ class IPv6Bot:
             # Now handle the WebSocket session without holding the semaphore
             try:
                 self.open_sockets += 1
-                logger_mgr.info(f"WebSocket connected for channel ID {channel_id}")
+                logger_mgr.info(f"WebSocket connected for channel ID {channel_id} (total: {self.open_sockets})")
 
                 # Socket binding is already handled at session level in _execute_viewer_simulation
                 # No need to bind again for WebSocket connection
@@ -707,6 +707,7 @@ class IPv6Bot:
                         )
 
                         logger_mgr.info(f"WebSocket tasks completed for channel {channel_id}")
+                        # Success - WebSocket completed normally, will decrement in finally block
                         return  # Success - exit retry loop
 
                 except (ConnectionClosed, websockets.exceptions.ConnectionClosedError) as e:
@@ -730,8 +731,13 @@ class IPv6Bot:
                     logger_mgr.error(f"WebSocket error: {e}", exc_info=self.debug)
                     raise
 
+                finally:
+                    # Always decrement the socket counter when WebSocket connection ends
+                    self.open_sockets -= 1
+                    logger_mgr.info(f"WebSocket disconnected for channel {channel_id} (remaining: {self.open_sockets})")
+
             except asyncio.TimeoutError as e:
-                self.open_sockets -= 1
+                # Note: socket counter decremented in the inner finally block
                 logger_mgr.warning(f"WebSocket timeout (attempt {retry_attempt + 1}/{max_ws_retries}): {e}")
 
                 if retry_attempt + 1 >= max_ws_retries:
@@ -744,7 +750,7 @@ class IPv6Bot:
                 await asyncio.sleep(retry_delay)
 
             except (ConnectionClosed, websockets.exceptions.ConnectionClosedError) as e:
-                self.open_sockets -= 1
+                # Note: socket counter decremented in the inner finally block
                 logger_mgr.warning(f"WebSocket closed (attempt {retry_attempt + 1}/{max_ws_retries}): {e}")
 
                 if retry_attempt + 1 >= max_ws_retries:
@@ -753,7 +759,7 @@ class IPv6Bot:
                 await asyncio.sleep(base_retry_delay)
 
             except websockets.exceptions.InvalidStatus as e:
-                self.open_sockets -= 1
+                # Note: socket counter decremented in the inner finally block
                 # Special handling for HTTP 429
                 if hasattr(e, 'status_code') and e.status_code == 429:
                     logger_mgr.warning(f"HTTP 429 on attempt {retry_attempt + 1}/{max_ws_retries}")
