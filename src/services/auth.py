@@ -173,8 +173,19 @@ class KickOAuthService:
             }
         )
         
-        # Browser fallback will be initialized lazily when needed
-        logger.info(f"OAuth service started (browser fallback: {'available' if self.enable_browser_fallback else 'disabled'})")
+        # Initialize browser fallback if enabled
+        if self.enable_browser_fallback:
+            try:
+                from .browser_client import BrowserAPIClient
+                self._browser_client = BrowserAPIClient(headless=True)
+                await self._browser_client.start()
+                logger.info("OAuth service started with browser fallback")
+            except Exception as e:
+                logger.warning(f"Browser fallback initialization failed: {e}")
+                logger.info("OAuth service started without browser fallback")
+                self.enable_browser_fallback = False  # Disable since initialization failed
+        else:
+            logger.info("OAuth service started")
     
     async def close(self) -> None:
         """Close the OAuth service."""
@@ -479,7 +490,7 @@ class KickOAuthService:
             Channel information from Kick.com API
         """
         # If OAuth is known to be blocked and browser is available, use browser directly
-        if self._oauth_blocked and self.enable_browser_fallback and self._browser_client:
+        if self._oauth_blocked and self.enable_browser_fallback:
             logger.debug(f"Using browser fallback for {username} (OAuth blocked)")
             return await self._get_channel_info_browser(username)
         
@@ -493,11 +504,15 @@ class KickOAuthService:
         except AuthenticationError as e:
             if "403" in str(e) or "Cloudflare" in str(e):
                 # OAuth blocked, try browser fallback
-                if self.enable_browser_fallback and self._browser_client:
+                if self.enable_browser_fallback:
                     logger.info(f"OAuth blocked for {username}, trying browser fallback")
-                    return await self._get_channel_info_browser(username)
+                    try:
+                        return await self._get_channel_info_browser(username)
+                    except Exception as browser_error:
+                        logger.error(f"Browser fallback failed for {username}: {browser_error}")
+                        raise AuthenticationError(f"Both OAuth and browser fallback failed: {browser_error}")
                 else:
-                    logger.error(f"OAuth blocked for {username}, no browser fallback available")
+                    logger.error(f"OAuth blocked for {username}, browser fallback disabled")
                     raise
             else:
                 # Other auth error, re-raise
@@ -505,16 +520,8 @@ class KickOAuthService:
     
     async def _get_channel_info_browser(self, username: str) -> Dict[str, Any]:
         """Get channel info using browser automation."""
-        # Initialize browser client lazily on first use
         if not self._browser_client:
-            logger.info("Initializing browser client for Cloudflare bypass...")
-            try:
-                from .browser_client import BrowserAPIClient
-                self._browser_client = BrowserAPIClient(headless=True)
-                await self._browser_client.start()
-            except Exception as e:
-                logger.error(f"Failed to initialize browser client: {e}")
-                raise AuthenticationError(f"Browser client initialization failed: {e}")
+            raise AuthenticationError("Browser client not initialized")
 
         data = await self._browser_client.fetch_channel_data(username)
         if not data:

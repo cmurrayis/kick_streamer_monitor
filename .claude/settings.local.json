@@ -27,7 +27,8 @@
       "Bash(wmic:*)",
       "Bash(netstat:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []
