@@ -439,9 +439,9 @@ class IPv6Bot:
                         logger_mgr
                     )
 
-                    # WebSocket ended, retry if attempts remain
-                    logger_mgr.warning("WebSocket handling ended. Will retry if attempts remain.")
-                    raise ConnectionClosed(None, "WebSocket handling completed")
+                    # WebSocket completed successfully, no need to retry
+                    logger_mgr.info("WebSocket session completed successfully.")
+                    break  # Exit the session retry loop
 
                 except asyncio.CancelledError:
                     logger_mgr.info("Viewer simulation cancelled.")
