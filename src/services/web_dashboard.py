@@ -15,6 +15,7 @@ from urllib.parse import parse_qs
 from aiohttp import web, WSMsgType
 from aiohttp.web import Request, Response, WebSocketResponse
 from .auth_manager import AuthManager
+from .worker_c2_api import WorkerC2API
 from models.user import UserRole, UserSession, UserStatus
 
 logger = logging.getLogger(__name__)
@@ -35,7 +36,10 @@ class WebDashboardService:
         
         # Authentication manager
         self.auth_manager = AuthManager(database_service=None)  # Will be set after db connection
-        
+
+        # Worker C2 API manager
+        self.worker_c2_api = None  # Will be initialized after db connection
+
         # Web server state
         self.app: Optional[web.Application] = None
         self.runner: Optional[web.AppRunner] = None
@@ -61,7 +65,12 @@ class WebDashboardService:
             if hasattr(self.monitor_service, 'database_service'):
                 self.database_service = self.monitor_service.database_service
                 self.auth_manager.database_service = self.monitor_service.database_service
-            
+
+                # Initialize Worker C2 API with database service
+                # Use a secure JWT secret (in production, this should come from configuration)
+                jwt_secret = "788ab52bc6296824141020dc38099d18f4367b73573e3cb2be7aab7ad466d63f"
+                self.worker_c2_api = WorkerC2API(self.database_service, jwt_secret=jwt_secret)
+
             # Create aiohttp application
             self.app = web.Application()
             
@@ -82,6 +91,11 @@ class WebDashboardService:
             self.app.router.add_get('/account', self._handle_account_settings)
             self.app.router.add_post('/account/update-profile', self._handle_update_profile)
             self.app.router.add_post('/account/change-password', self._handle_change_password)
+
+            # Worker C2 API routes (if initialized)
+            if self.worker_c2_api:
+                self.worker_c2_api.setup_routes(self.app)
+                logger.info("Worker C2 API routes initialized")
 
             # Admin routes (protected)
             self.app.router.add_get('/admin', self._handle_admin_dashboard)

@@ -11,6 +11,9 @@ aiohttp==3.9.1
 # Browser automation for Cloudflare bypass
 playwright==1.40.0
 
+# Authentication
+PyJWT==2.8.0
+
 # UI and Console
 rich==13.7.0
 
