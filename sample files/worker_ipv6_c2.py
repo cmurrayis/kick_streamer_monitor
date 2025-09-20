@@ -357,6 +357,27 @@ class IPv6Bot:
         )
         max_session_attempts = 5
 
+        # Create persistent socket binding for entire session
+        import functools
+        original_socket = socket.socket
+
+        def bound_socket(*args, **kwargs):
+            sock = original_socket(*args, **kwargs)
+            try:
+                if sock.family == socket.AF_INET6 and sock.type == socket.SOCK_STREAM:
+                    sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+                    sock.bind((ipv6_address, 0))
+                    logger_mgr.debug(f"Bound socket to IPv6: {ipv6_address}")
+            except OSError as e:
+                if e.errno != 22:
+                    logger_mgr.debug(f"Could not bind IPv6: {e}")
+            except Exception:
+                pass
+            return sock
+
+        # Apply socket binding for entire session
+        socket.socket = bound_socket
+
         try:
             for attempt in range(max_session_attempts):
                 try:
@@ -368,10 +389,10 @@ class IPv6Bot:
 
                     # IMPORTANT: Still make the channel API call to establish session
                     # Kick tracks the full flow from same IP: channel API -> token -> websocket
-                    await self._establish_session(scraper, ipv6_address, logger_mgr)
+                    await self._establish_session(scraper, logger_mgr)
 
                     # Now get WebSocket token with established session
-                    ws_token = await self._get_websocket_token(scraper, ipv6_address, logger_mgr)
+                    ws_token = await self._get_websocket_token(scraper, logger_mgr)
                     if not ws_token:
                         raise ValueError("Failed to get WebSocket token")
 
@@ -401,127 +422,78 @@ class IPv6Bot:
 
                     await asyncio.sleep(random.uniform(5, 10))
         finally:
+            # Restore original socket
+            socket.socket = original_socket
             try:
                 scraper.close()
             except:
                 pass
 
-    async def _establish_session(self, scraper, ipv6_address: str, logger_mgr):
+    async def _establish_session(self, scraper, logger_mgr):
         """
         Make channel API call to establish session with Kick.
         This is required for viewer count to register properly.
         We use the IDs from C2 but still make the API call for session tracking.
+        Socket binding is already handled in _execute_viewer_simulation.
         """
         if not self.streamer_name:
             return False
 
         try:
-            import functools
-            original_socket = socket.socket
+            # Make channel API call to establish session
+            api_url = f"https://kick.com/api/v2/channels/{self.streamer_name}"
+            logger_mgr.debug(f"Establishing session via channel API: {api_url}")
 
-            def bound_socket(*args, **kwargs):
-                sock = original_socket(*args, **kwargs)
-                try:
-                    if sock.family == socket.AF_INET6 and sock.type == socket.SOCK_STREAM:
-                        sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
-                        sock.bind((ipv6_address, 0))
-                except OSError as e:
-                    if e.errno != 22:
-                        logger_mgr.debug(f"Could not bind IPv6: {e}")
-                except Exception:
-                    pass
-                return sock
+            channel_response = await asyncio.to_thread(scraper.get, api_url, timeout=20)
 
-            # Temporarily replace socket.socket
-            socket.socket = bound_socket
+            if channel_response.status_code == 403:
+                logger_mgr.error(f"Got 403 Forbidden - Cloudflare block detected")
+                raise ValueError("403 Forbidden - Cloudflare protection active")
 
-            try:
-                # Make channel API call to establish session
-                api_url = f"https://kick.com/api/v2/channels/{self.streamer_name}"
-                logger_mgr.debug(f"Establishing session via channel API: {api_url}")
+            channel_response.raise_for_status()
 
-                channel_response = await asyncio.to_thread(scraper.get, api_url, timeout=20)
-
-                if channel_response.status_code == 403:
-                    logger_mgr.error(f"Got 403 Forbidden - Cloudflare block detected")
-                    raise ValueError("403 Forbidden - Cloudflare protection active")
-
-                channel_response.raise_for_status()
-
-                # We don't need to parse the response since we have IDs from C2
-                # This call is just to establish the session
-                logger_mgr.debug(f"Session established for {self.streamer_name} (status: {channel_response.status_code})")
-                return True
-
-            finally:
-                socket.socket = original_socket
+            # We don't need to parse the response since we have IDs from C2
+            # This call is just to establish the session
+            logger_mgr.debug(f"Session established for {self.streamer_name} (status: {channel_response.status_code})")
+            return True
 
         except Exception as e:
             logger_mgr.error(f"Failed to establish session: {e}", exc_info=self.debug)
             return False
 
-    async def _get_websocket_token(self, scraper, ipv6_address: str, logger_mgr):
+    async def _get_websocket_token(self, scraper, logger_mgr):
         """Get WebSocket token only (channel_id and livestream_id come from C2 API)"""
         if not self.streamer_name:
             return None
 
         try:
-            # Bind socket for token request
-            import functools
-            original_socket = socket.socket
+            # Socket binding is already handled in _execute_viewer_simulation
+            # Get WebSocket token
+            token_url = "https://websockets.kick.com/viewer/v1/token"
+            headers = {
+                'Referer': f'https://kick.com/{self.streamer_name}',
+                'Origin': 'https://kick.com',
+                'x-client-token': self.client_token,
+                'User-Agent': scraper.headers.get('User-Agent', 'Mozilla/5.0')
+            }
 
-            def bound_socket(*args, **kwargs):
-                # Create the socket normally
-                sock = original_socket(*args, **kwargs)
+            logger_mgr.debug(f"Fetching WebSocket token from: {token_url}")
+            token_response = await asyncio.to_thread(scraper.get, token_url, headers=headers, timeout=20)
 
-                # Only bind IPv6 addresses to IPv6 TCP sockets
-                try:
-                    if sock.family == socket.AF_INET6 and sock.type == socket.SOCK_STREAM:
-                        sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
-                        sock.bind((ipv6_address, 0))
-                except OSError as e:
-                    # Errno 22 means the socket can't be bound (wrong type or already bound)
-                    if e.errno != 22:
-                        logger_mgr.debug(f"Could not bind IPv6: {e}")
-                except Exception:
-                    pass
+            if token_response.status_code == 403:
+                logger_mgr.error("Got 403 on token request - Cloudflare block")
+                raise ValueError("403 Forbidden on token request")
 
-                return sock
+            token_response.raise_for_status()
+            token_data = token_response.json()
+            ws_token = token_data.get("data", {}).get("token") or token_data.get("token")
 
-            # Temporarily replace socket.socket
-            socket.socket = bound_socket
+            if not ws_token:
+                logger_mgr.error(f"Token response: {token_data}")
+                raise ValueError("Failed to get WebSocket token")
 
-            try:
-                # Get WebSocket token
-                token_url = "https://websockets.kick.com/viewer/v1/token"
-                headers = {
-                    'Referer': f'https://kick.com/{self.streamer_name}',
-                    'Origin': 'https://kick.com',
-                    'x-client-token': self.client_token,
-                    'User-Agent': scraper.headers.get('User-Agent', 'Mozilla/5.0')
-                }
-
-                logger_mgr.debug(f"Fetching WebSocket token from: {token_url}")
-                token_response = await asyncio.to_thread(scraper.get, token_url, headers=headers, timeout=20)
-
-                if token_response.status_code == 403:
-                    logger_mgr.error("Got 403 on token request - Cloudflare block")
-                    raise ValueError("403 Forbidden on token request")
-
-                token_response.raise_for_status()
-                token_data = token_response.json()
-                ws_token = token_data.get("data", {}).get("token") or token_data.get("token")
-
-                if not ws_token:
-                    logger_mgr.error(f"Token response: {token_data}")
-                    raise ValueError("Failed to get WebSocket token")
-
-                logger_mgr.debug("Successfully retrieved WebSocket token")
-                return ws_token
-
-            finally:
-                # Restore original socket
-                socket.socket = original_socket
+            logger_mgr.debug("Successfully retrieved WebSocket token")
+            return ws_token
 
         except Exception as e:
             logger_mgr.error(f"Failed to get WebSocket token: {e}", exc_info=self.debug)
@@ -539,38 +511,8 @@ class IPv6Bot:
                 self.open_sockets += 1
                 logger_mgr.debug(f"WebSocket connection attempt {retry_attempt + 1}/{max_ws_retries} for channel {channel_id}")
 
-                # Monkey-patch socket creation for IPv6 binding
-                import functools
-                original_socket = socket.socket
-
-                def bound_socket(*args, **kwargs):
-                    # Create the socket normally
-                    sock = original_socket(*args, **kwargs)
-
-                    # Only attempt to bind if:
-                    # 1. This is an IPv6 socket (family == AF_INET6)
-                    # 2. This is a TCP socket (type == SOCK_STREAM)
-                    # 3. We have a valid IPv6 address to bind to
-                    try:
-                        if sock.family == socket.AF_INET6 and sock.type == socket.SOCK_STREAM:
-                            sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
-                            sock.bind((ipv6_address, 0))
-                            # Only log successful binds at debug level
-                            logger_mgr.debug(f"Bound WebSocket to IPv6: {ipv6_address}")
-                    except OSError as e:
-                        # Errno 22 (Invalid argument) happens when the socket is already bound
-                        # or when trying to bind incompatible address types
-                        if e.errno != 22:  # Only log non-"Invalid argument" errors
-                            logger_mgr.debug(f"Could not bind IPv6: {e}")
-                    except Exception:
-                        # Silently ignore other binding errors
-                        pass
-
-                    return sock
-
-                # Temporarily replace socket.socket
-                socket.socket = bound_socket
-
+                # Socket binding is already handled at session level in _execute_viewer_simulation
+                # No need to bind again for WebSocket connection
                 try:
                     # Connect WebSocket with increased timeout and retry logic
                     async with websockets.connect(
@@ -691,10 +633,6 @@ class IPv6Bot:
 
                         logger_mgr.info(f"WebSocket tasks completed for channel {channel_id}")
                         return  # Success - exit retry loop
-
-                finally:
-                    # Restore original socket
-                    socket.socket = original_socket
 
             except asyncio.TimeoutError as e:
                 self.open_sockets -= 1
