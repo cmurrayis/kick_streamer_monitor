@@ -135,15 +135,15 @@ class WorkerC2API:
             """
             worker_record = await self.database_service.snags_service._connection_pool.fetchrow(worker_query, hostname)
 
-                if not worker_record:
-                    logger.warning(f"No assignment found for hostname: {hostname}")
-                    return web.json_response({
-                        'status': 'offline',
-                        'count': 0
-                    })
+            if not worker_record:
+                logger.warning(f"No assignment found for hostname: {hostname}")
+                return web.json_response({
+                    'status': 'offline',
+                    'count': 0
+                })
 
-                target = worker_record['target']
-                count = worker_record['count'] or 0
+            target = worker_record['target']
+            count = worker_record['count'] or 0
 
             # If no target assigned, return offline
             if not target:
