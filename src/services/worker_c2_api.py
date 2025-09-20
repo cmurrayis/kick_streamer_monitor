@@ -241,9 +241,9 @@ class WorkerC2API:
             """
             await self.database_service.snags_service._connection_pool.execute(
                 update_query,
-                workers,
+                str(workers),  # Convert to string for wrk_count column
                 status.lower(),  # Convert "Online" to "online" for wrk_status
-                datetime.now(timezone.utc),
+                datetime.now(),  # Use naive datetime for PostgreSQL
                 hostname
             )
 
@@ -282,7 +282,7 @@ class WorkerC2API:
             """
             await self.database_service.snags_service._connection_pool.execute(
                 update_query,
-                datetime.now(timezone.utc),
+                datetime.now(),  # Use naive datetime for PostgreSQL
                 hostname
             )
 
