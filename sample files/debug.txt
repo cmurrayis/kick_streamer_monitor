@@ -1,0 +1,509 @@
+2025-09-20 06:23:19,346 - __main__ - INFO - Found 1001 IPv6 addresses configured on enp1s0
+2025-09-20 06:23:19,346 - __main__ - INFO - IPv6 pool initialized with 1001 addresses from interface enp1s0
+2025-09-20 06:23:19,346 - __main__ - INFO - IPv6 Pool initialized: {'available': 1001, 'in_use': 0, 'total': 1001}
+Status: OFFLINE | Target: N/A | Workers: 0/0 | Open Sockets: 0/0 | IPv6 Pool: 1001/1001 | Failures: 0 | CPU: 96.2% | Memory: 31.9%   
+2025-09-20 06:23:19,350 - __main__ - INFO - Transitioning to ONLINE for target: musicislove (channel_id: 1457365)
+2025-09-20 06:23:19,350 - __main__ - INFO - Starting 10 workers with staggered delays
+2025-09-20 06:23:19,351 - Manager-232 - DEBUG - Waiting to acquire IPv6 from pool...
+2025-09-20 06:23:19,351 - __main__ - DEBUG - Acquired IPv6: 2001:19f0:0:4f27:69bc:843c:cbdb:84a4
+2025-09-20 06:23:19,351 - Manager-232 - INFO - Thread 232 acquired unique IPv6: 2001:19f0:0:4f27:69bc:843c:cbdb:84a4 for 'musicislove'
+2025-09-20 06:23:19,399 - Manager-232 - DEBUG - Session attempt 1/5: Establishing session for channel_id 1457365
+2025-09-20 06:23:19,399 - Manager-232 - DEBUG - Establishing session via channel API: https://kick.com/api/v2/channels/musicislove
+2025-09-20 06:23:19,402 - urllib3.connectionpool - DEBUG - Starting new HTTPS connection (1): kick.com:443
+2025-09-20 06:23:19,408 - Manager-232 - INFO - Thread bound to IPv6: 2001:19f0:0:4f27:69bc:843c:cbdb:84a4
+2025-09-20 06:23:19,779 - Manager-616 - DEBUG - Waiting to acquire IPv6 from pool...
+2025-09-20 06:23:19,779 - __main__ - DEBUG - Acquired IPv6: 2001:19f0:0:4f27:82b8:3751:c812:a0e8
+2025-09-20 06:23:19,779 - Manager-616 - INFO - Thread 616 acquired unique IPv6: 2001:19f0:0:4f27:82b8:3751:c812:a0e8 for 'musicislove'
+2025-09-20 06:23:19,828 - Manager-616 - DEBUG - Session attempt 1/5: Establishing session for channel_id 1457365
+2025-09-20 06:23:19,828 - Manager-616 - DEBUG - Establishing session via channel API: https://kick.com/api/v2/channels/musicislove
+2025-09-20 06:23:19,830 - urllib3.connectionpool - DEBUG - Starting new HTTPS connection (1): kick.com:443
+2025-09-20 06:23:19,938 - urllib3.connectionpool - DEBUG - https://kick.com:443 "GET /api/v2/channels/musicislove HTTP/1.1" 200 None
+2025-09-20 06:23:19,939 - Manager-232 - DEBUG - Session established for musicislove (status: 200)
+2025-09-20 06:23:19,940 - Manager-232 - DEBUG - Fetching WebSocket token from: https://websockets.kick.com/viewer/v1/token
+2025-09-20 06:23:19,941 - urllib3.connectionpool - DEBUG - Starting new HTTPS connection (1): websockets.kick.com:443
+2025-09-20 06:23:20,073 - Manager-768 - DEBUG - Waiting to acquire IPv6 from pool...
+2025-09-20 06:23:20,074 - __main__ - DEBUG - Acquired IPv6: 2001:19f0:0:4f27:5eac:c23d:5f3:8e00
+2025-09-20 06:23:20,074 - Manager-768 - INFO - Thread 768 acquired unique IPv6: 2001:19f0:0:4f27:5eac:c23d:5f3:8e00 for 'musicislove'
+2025-09-20 06:23:20,095 - urllib3.connectionpool - DEBUG - https://websockets.kick.com:443 "GET /viewer/v1/token HTTP/1.1" 200 None
+2025-09-20 06:23:20,124 - Manager-768 - DEBUG - Session attempt 1/5: Establishing session for channel_id 1457365
+2025-09-20 06:23:20,125 - Manager-768 - DEBUG - Establishing session via channel API: https://kick.com/api/v2/channels/musicislove
+2025-09-20 06:23:20,126 - urllib3.connectionpool - DEBUG - Starting new HTTPS connection (1): kick.com:443
+2025-09-20 06:23:20,127 - Manager-232 - DEBUG - Successfully retrieved WebSocket token
+2025-09-20 06:23:20,127 - Manager-232 - DEBUG - WebSocket connection attempt 1/3 for channel 1457365
+2025-09-20 06:23:20,149 - websockets.client - DEBUG - = connection is CONNECTING
+2025-09-20 06:23:20,247 - websockets.client - DEBUG - > GET /viewer/v1/connect?token=01K5JWN5ZP8H0G32WB7TVS2EA6 HTTP/1.1
+2025-09-20 06:23:20,247 - websockets.client - DEBUG - > Host: websockets.kick.com
+2025-09-20 06:23:20,247 - websockets.client - DEBUG - > Upgrade: websocket
+2025-09-20 06:23:20,247 - websockets.client - DEBUG - > Connection: Upgrade
+2025-09-20 06:23:20,248 - websockets.client - DEBUG - > Sec-WebSocket-Key: hAb6gRxM/PLOiQCe+9dAtQ==
+2025-09-20 06:23:20,248 - websockets.client - DEBUG - > Sec-WebSocket-Version: 13
+2025-09-20 06:23:20,248 - websockets.client - DEBUG - > Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits
+2025-09-20 06:23:20,248 - websockets.client - DEBUG - > User-Agent: Python/3.11 websockets/15.0.1
+2025-09-20 06:23:20,269 - urllib3.connectionpool - DEBUG - https://kick.com:443 "GET /api/v2/channels/musicislove HTTP/1.1" 200 None
+2025-09-20 06:23:20,271 - Manager-768 - DEBUG - Session established for musicislove (status: 200)
+2025-09-20 06:23:20,271 - Manager-768 - DEBUG - Fetching WebSocket token from: https://websockets.kick.com/viewer/v1/token
+2025-09-20 06:23:20,272 - urllib3.connectionpool - DEBUG - Starting new HTTPS connection (1): websockets.kick.com:443
+Status: ONLINE | Target: musicislove | Workers: 3/10 | Open Sockets: 0/10 | IPv6 Pool: 998/1001 | Failures: 0 | CPU: 54.5% | Memory: 32.3%   
+2025-09-20 06:23:20,430 - urllib3.connectionpool - DEBUG - https://websockets.kick.com:443 "GET /viewer/v1/token HTTP/1.1" 200 None
+2025-09-20 06:23:20,431 - Manager-768 - DEBUG - Successfully retrieved WebSocket token
+2025-09-20 06:23:20,431 - Manager-768 - DEBUG - WebSocket connection attempt 1/3 for channel 1457365
+2025-09-20 06:23:20,439 - websockets.client - DEBUG - = connection is CONNECTING
+2025-09-20 06:23:20,498 - websockets.client - DEBUG - > GET /viewer/v1/connect?token=01K5JWN6A23Z9BP5K2TJYYFEYJ HTTP/1.1
+2025-09-20 06:23:20,498 - websockets.client - DEBUG - > Host: websockets.kick.com
+2025-09-20 06:23:20,498 - websockets.client - DEBUG - > Upgrade: websocket
+2025-09-20 06:23:20,499 - websockets.client - DEBUG - > Connection: Upgrade
+2025-09-20 06:23:20,499 - websockets.client - DEBUG - > Sec-WebSocket-Key: yC9Rn27wmztgdiGbD9+MGw==
+2025-09-20 06:23:20,499 - websockets.client - DEBUG - > Sec-WebSocket-Version: 13
+2025-09-20 06:23:20,499 - websockets.client - DEBUG - > Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits
+2025-09-20 06:23:20,499 - websockets.client - DEBUG - > User-Agent: Python/3.11 websockets/15.0.1
+2025-09-20 06:23:20,554 - websockets.client - DEBUG - < HTTP/1.1 101 Switching Protocols
+2025-09-20 06:23:20,555 - websockets.client - DEBUG - < Date: Sat, 20 Sep 2025 06:23:20 GMT
+2025-09-20 06:23:20,555 - websockets.client - DEBUG - < Connection: upgrade
+2025-09-20 06:23:20,555 - websockets.client - DEBUG - < Upgrade: websocket
+2025-09-20 06:23:20,555 - websockets.client - DEBUG - < Sec-WebSocket-Accept: tx9aFOlVUg6Gw1EXEW8MGiSytjY=
+2025-09-20 06:23:20,555 - websockets.client - DEBUG - < cf-cache-status: DYNAMIC
+2025-09-20 06:23:20,555 - websockets.client - DEBUG - < Set-Cookie: __cf_bm=b4A5JRXKH1pyXxRfiiHjZq8m_xm81_Gr7hBGxeQfDg4-1758349400-1.0.1.1-nMiiDTMPMySmOM4QwSx.2Q9N2DSTk4W9Gxd4iOwcQwKN362qZvD1agtgVbXQECBkdCWO9f.FkdDx1WqDNh6Mlr.twG6dOgO2ngcfFwfmvns; path=/; expires=Sat, 20-Sep-25 06:53:20 GMT; domain=.kick.com; HttpOnly; Secure; SameSite=None
+2025-09-20 06:23:20,556 - websockets.client - DEBUG - < Set-Cookie: _cfuvid=PGT6BvXuN44dbeOduKBB4yxZxDMyyKSPX8PVZXAo2q8-1758349400552-0.0.1.1-604800000; path=/; domain=.kick.com; HttpOnly; Secure; SameSite=None
+2025-09-20 06:23:20,556 - websockets.client - DEBUG - < Server: cloudflare
+2025-09-20 06:23:20,556 - websockets.client - DEBUG - < CF-RAY: 981f3bc78a79e8a3-EWR
+2025-09-20 06:23:20,556 - websockets.client - DEBUG - < alt-svc: h3=":443"; ma=86400
+2025-09-20 06:23:20,556 - websockets.client - DEBUG - = connection is OPEN
+2025-09-20 06:23:20,557 - Manager-232 - INFO - WebSocket connected for channel ID 1457365
+2025-09-20 06:23:20,557 - websockets.client - DEBUG - > TEXT '{"type": "channel_handshake", "data": {"message...hannelId": "1457365"}}}' [76 bytes]
+2025-09-20 06:23:20,557 - Manager-232 - DEBUG - Sent initial channel handshake
+2025-09-20 06:23:20,558 - websockets.client - DEBUG - > TEXT '{"type": "ping"}' [16 bytes]
+2025-09-20 06:23:20,558 - Manager-232 - DEBUG - Sent initial ping
+2025-09-20 06:23:20,558 - websockets.client - DEBUG - > TEXT '{"type": "user_event", "data": {"message": {"na...stream_id": 75149874}}}' [137 bytes]
+2025-09-20 06:23:20,559 - Manager-232 - INFO - Sent initial tracking event for livestream 75149874
+2025-09-20 06:23:20,573 - Manager-680 - DEBUG - Waiting to acquire IPv6 from pool...
+2025-09-20 06:23:20,573 - __main__ - DEBUG - Acquired IPv6: 2001:19f0:0:4f27:58a1:6417:24c6:3056
+2025-09-20 06:23:20,574 - Manager-680 - INFO - Thread 680 acquired unique IPv6: 2001:19f0:0:4f27:58a1:6417:24c6:3056 for 'musicislove'
+2025-09-20 06:23:20,623 - Manager-680 - DEBUG - Session attempt 1/5: Establishing session for channel_id 1457365
+2025-09-20 06:23:20,623 - Manager-680 - DEBUG - Establishing session via channel API: https://kick.com/api/v2/channels/musicislove
+2025-09-20 06:23:20,625 - urllib3.connectionpool - DEBUG - Starting new HTTPS connection (1): kick.com:443
+2025-09-20 06:23:20,630 - urllib3.connectionpool - DEBUG - https://kick.com:443 "GET /api/v2/channels/musicislove HTTP/1.1" 200 None
+2025-09-20 06:23:20,631 - Manager-616 - DEBUG - Session established for musicislove (status: 200)
+2025-09-20 06:23:20,631 - Manager-616 - DEBUG - Fetching WebSocket token from: https://websockets.kick.com/viewer/v1/token
+2025-09-20 06:23:20,632 - urllib3.connectionpool - DEBUG - Starting new HTTPS connection (1): websockets.kick.com:443
+2025-09-20 06:23:20,635 - websockets.client - DEBUG - < TEXT '{"type":"pong"}' [15 bytes]
+2025-09-20 06:23:20,635 - Manager-232 - DEBUG - Received: {"type":"pong"}
+2025-09-20 06:23:20,635 - Manager-232 - DEBUG - Received pong
+2025-09-20 06:23:20,783 - urllib3.connectionpool - DEBUG - https://kick.com:443 "GET /api/v2/channels/musicislove HTTP/1.1" 200 None
+2025-09-20 06:23:20,785 - Manager-680 - DEBUG - Session established for musicislove (status: 200)
+2025-09-20 06:23:20,785 - Manager-680 - DEBUG - Fetching WebSocket token from: https://websockets.kick.com/viewer/v1/token
+2025-09-20 06:23:20,787 - urllib3.connectionpool - DEBUG - Starting new HTTPS connection (1): websockets.kick.com:443
+2025-09-20 06:23:20,856 - Manager-216 - DEBUG - Waiting to acquire IPv6 from pool...
+2025-09-20 06:23:20,856 - __main__ - DEBUG - Acquired IPv6: 2001:19f0:0:4f27:680b:699d:ac18:78f3
+2025-09-20 06:23:20,856 - Manager-216 - INFO - Thread 216 acquired unique IPv6: 2001:19f0:0:4f27:680b:699d:ac18:78f3 for 'musicislove'
+2025-09-20 06:23:20,906 - Manager-216 - DEBUG - Session attempt 1/5: Establishing session for channel_id 1457365
+2025-09-20 06:23:20,907 - Manager-216 - DEBUG - Establishing session via channel API: https://kick.com/api/v2/channels/musicislove
+2025-09-20 06:23:20,908 - urllib3.connectionpool - DEBUG - Starting new HTTPS connection (1): kick.com:443
+2025-09-20 06:23:20,909 - websockets.client - DEBUG - < HTTP/1.1 101 Switching Protocols
+2025-09-20 06:23:20,909 - websockets.client - DEBUG - < Date: Sat, 20 Sep 2025 06:23:20 GMT
+2025-09-20 06:23:20,909 - websockets.client - DEBUG - < Connection: upgrade
+2025-09-20 06:23:20,909 - websockets.client - DEBUG - < Upgrade: websocket
+2025-09-20 06:23:20,909 - websockets.client - DEBUG - < Sec-WebSocket-Accept: ql68ruTMYM39sWGwpD4wpOBQtNY=
+2025-09-20 06:23:20,909 - websockets.client - DEBUG - < cf-cache-status: DYNAMIC
+2025-09-20 06:23:20,910 - websockets.client - DEBUG - < Set-Cookie: __cf_bm=1gLyjqX52Ttc9VAdpHjxTkYYBS.EAmIX8mI.hx8HXlI-1758349400-1.0.1.1-ZVIZY60mmzvhqzYhbUcDfuAB97FKsKKr4VHDv8O1IlunVA6KcVmeWVAJSivGNk.bValImDbR.iL4P1uCFCmfDbQeuyv3ABSgeQbbLOy8d7k; path=/; expires=Sat, 20-Sep-25 06:53:20 GMT; domain=.kick.com; HttpOnly; Secure; SameSite=None
+2025-09-20 06:23:20,910 - websockets.client - DEBUG - < Set-Cookie: _cfuvid=fRnQTPnm4kmR.quwRTV.lE9rtEsXFZuBwqa23TlUf1k-1758349400876-0.0.1.1-604800000; path=/; domain=.kick.com; HttpOnly; Secure; SameSite=None
+2025-09-20 06:23:20,910 - websockets.client - DEBUG - < Server: cloudflare
+2025-09-20 06:23:20,910 - websockets.client - DEBUG - < CF-RAY: 981f3bc92fbfa4a0-EWR
+2025-09-20 06:23:20,910 - websockets.client - DEBUG - < alt-svc: h3=":443"; ma=86400
+2025-09-20 06:23:20,910 - websockets.client - DEBUG - = connection is OPEN
+2025-09-20 06:23:20,911 - Manager-768 - INFO - WebSocket connected for channel ID 1457365
+2025-09-20 06:23:20,911 - websockets.client - DEBUG - > TEXT '{"type": "channel_handshake", "data": {"message...hannelId": "1457365"}}}' [76 bytes]
+2025-09-20 06:23:20,911 - Manager-768 - DEBUG - Sent initial channel handshake
+2025-09-20 06:23:20,912 - websockets.client - DEBUG - > TEXT '{"type": "ping"}' [16 bytes]
+2025-09-20 06:23:20,912 - Manager-768 - DEBUG - Sent initial ping
+2025-09-20 06:23:20,914 - websockets.client - DEBUG - > TEXT '{"type": "user_event", "data": {"message": {"na...stream_id": 75149874}}}' [137 bytes]
+2025-09-20 06:23:20,914 - Manager-768 - INFO - Sent initial tracking event for livestream 75149874
+2025-09-20 06:23:20,965 - urllib3.connectionpool - DEBUG - https://websockets.kick.com:443 "GET /viewer/v1/token HTTP/1.1" 200 None
+2025-09-20 06:23:20,966 - Manager-680 - DEBUG - Successfully retrieved WebSocket token
+2025-09-20 06:23:20,966 - Manager-680 - DEBUG - WebSocket connection attempt 1/3 for channel 1457365
+2025-09-20 06:23:20,975 - websockets.client - DEBUG - = connection is CONNECTING
+2025-09-20 06:23:21,028 - urllib3.connectionpool - DEBUG - https://kick.com:443 "GET /api/v2/channels/musicislove HTTP/1.1" 200 None
+2025-09-20 06:23:21,038 - websockets.client - DEBUG - < TEXT '{"type":"pong"}' [15 bytes]
+2025-09-20 06:23:21,039 - Manager-216 - DEBUG - Session established for musicislove (status: 200)
+2025-09-20 06:23:21,039 - Manager-216 - DEBUG - Fetching WebSocket token from: https://websockets.kick.com/viewer/v1/token
+2025-09-20 06:23:21,039 - Manager-768 - DEBUG - Received: {"type":"pong"}
+2025-09-20 06:23:21,040 - urllib3.connectionpool - DEBUG - Starting new HTTPS connection (1): websockets.kick.com:443
+2025-09-20 06:23:21,040 - Manager-768 - DEBUG - Received pong
+2025-09-20 06:23:21,052 - websockets.client - DEBUG - > GET /viewer/v1/connect?token=01K5JWN6TFX448H8468Y20DDPB HTTP/1.1
+2025-09-20 06:23:21,052 - websockets.client - DEBUG - > Host: websockets.kick.com
+2025-09-20 06:23:21,052 - websockets.client - DEBUG - > Upgrade: websocket
+2025-09-20 06:23:21,052 - websockets.client - DEBUG - > Connection: Upgrade
+2025-09-20 06:23:21,052 - websockets.client - DEBUG - > Sec-WebSocket-Key: DjPwA4+bBrngqckV38Ilgw==
+2025-09-20 06:23:21,053 - websockets.client - DEBUG - > Sec-WebSocket-Version: 13
+2025-09-20 06:23:21,053 - websockets.client - DEBUG - > Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits
+2025-09-20 06:23:21,053 - websockets.client - DEBUG - > User-Agent: Python/3.11 websockets/15.0.1
+2025-09-20 06:23:21,084 - urllib3.connectionpool - DEBUG - https://websockets.kick.com:443 "GET /viewer/v1/token HTTP/1.1" 200 None
+2025-09-20 06:23:21,085 - Manager-616 - DEBUG - Successfully retrieved WebSocket token
+2025-09-20 06:23:21,167 - Manager-616 - DEBUG - WebSocket connection attempt 1/3 for channel 1457365
+2025-09-20 06:23:21,181 - websockets.client - DEBUG - = connection is CONNECTING
+2025-09-20 06:23:21,212 - urllib3.connectionpool - DEBUG - https://websockets.kick.com:443 "GET /viewer/v1/token HTTP/1.1" 200 None
+2025-09-20 06:23:21,232 - Manager-216 - DEBUG - Successfully retrieved WebSocket token
+2025-09-20 06:23:21,238 - websockets.client - DEBUG - > GET /viewer/v1/connect?token=01K5JWN6YBM0S30XV3SXC2N2NY HTTP/1.1
+2025-09-20 06:23:21,238 - websockets.client - DEBUG - > Host: websockets.kick.com
+2025-09-20 06:23:21,239 - websockets.client - DEBUG - > Upgrade: websocket
+2025-09-20 06:23:21,239 - websockets.client - DEBUG - > Connection: Upgrade
+2025-09-20 06:23:21,239 - websockets.client - DEBUG - > Sec-WebSocket-Key: r4goe4tGOfgqPeIWLxpRCQ==
+2025-09-20 06:23:21,239 - websockets.client - DEBUG - > Sec-WebSocket-Version: 13
+2025-09-20 06:23:21,239 - websockets.client - DEBUG - > Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits
+2025-09-20 06:23:21,239 - websockets.client - DEBUG - > User-Agent: Python/3.11 websockets/15.0.1
+Status: ONLINE | Target: musicislove | Workers: 5/10 | Open Sockets: 2/10 | IPv6 Pool: 996/1001 | Failures: 0 | CPU: 61.4% | Memory: 33.2%   
+2025-09-20 06:23:21,352 - Manager-336 - DEBUG - Waiting to acquire IPv6 from pool...
+2025-09-20 06:23:21,352 - __main__ - DEBUG - Acquired IPv6: 2001:19f0:0:4f27:50ed:1bc6:2ae2:af2e
+2025-09-20 06:23:21,352 - Manager-336 - INFO - Thread 336 acquired unique IPv6: 2001:19f0:0:4f27:50ed:1bc6:2ae2:af2e for 'musicislove'
+2025-09-20 06:23:21,406 - Manager-336 - DEBUG - Session attempt 1/5: Establishing session for channel_id 1457365
+2025-09-20 06:23:21,406 - Manager-336 - DEBUG - Establishing session via channel API: https://kick.com/api/v2/channels/musicislove
+2025-09-20 06:23:21,407 - urllib3.connectionpool - DEBUG - Starting new HTTPS connection (1): kick.com:443
+2025-09-20 06:23:21,408 - websockets.client - DEBUG - < HTTP/1.1 101 Switching Protocols
+2025-09-20 06:23:21,411 - websockets.client - DEBUG - < Date: Sat, 20 Sep 2025 06:23:21 GMT
+2025-09-20 06:23:21,411 - websockets.client - DEBUG - < Connection: upgrade
+2025-09-20 06:23:21,411 - websockets.client - DEBUG - < Upgrade: websocket
+2025-09-20 06:23:21,411 - websockets.client - DEBUG - < Sec-WebSocket-Accept: RwVKDKDNM+Y/QoAiPp5vhD5RFLc=
+2025-09-20 06:23:21,412 - websockets.client - DEBUG - < cf-cache-status: DYNAMIC
+2025-09-20 06:23:21,412 - websockets.client - DEBUG - < Set-Cookie: __cf_bm=pLGmuZe4OEx0KwF0sOLjCtzwhvBDrrlvzFelRN1DJ04-1758349401-1.0.1.1-yT3vCyVBG2SarUd_.bytSLnvHGFFDhrmGWqhx0SN_DZlpwEb9osmjVyrGPkoKitauPJyGVgSyKUq6BAUNq4Y1TfLGRz1nvW7jeRJ_FBF9vs; path=/; expires=Sat, 20-Sep-25 06:53:21 GMT; domain=.kick.com; HttpOnly; Secure; SameSite=None
+2025-09-20 06:23:21,412 - websockets.client - DEBUG - < Set-Cookie: _cfuvid=GMF6KHSSh2lJIJ0uDZ7kkwuoUMJl1rn4E97SVd9HGxw-1758349401399-0.0.1.1-604800000; path=/; domain=.kick.com; HttpOnly; Secure; SameSite=None
+2025-09-20 06:23:21,412 - websockets.client - DEBUG - < Server: cloudflare
+2025-09-20 06:23:21,412 - websockets.client - DEBUG - < CF-RAY: 981f3bcc99997327-EWR
+2025-09-20 06:23:21,412 - websockets.client - DEBUG - < alt-svc: h3=":443"; ma=86400
+2025-09-20 06:23:21,414 - websockets.client - DEBUG - = connection is OPEN
+2025-09-20 06:23:21,415 - Manager-216 - DEBUG - WebSocket connection attempt 1/3 for channel 1457365
+2025-09-20 06:23:21,415 - Manager-680 - INFO - WebSocket connected for channel ID 1457365
+2025-09-20 06:23:21,418 - websockets.client - DEBUG - > TEXT '{"type": "channel_handshake", "data": {"message...hannelId": "1457365"}}}' [76 bytes]
+2025-09-20 06:23:21,419 - Manager-680 - DEBUG - Sent initial channel handshake
+2025-09-20 06:23:21,419 - websockets.client - DEBUG - > TEXT '{"type": "ping"}' [16 bytes]
+2025-09-20 06:23:21,419 - Manager-680 - DEBUG - Sent initial ping
+2025-09-20 06:23:21,419 - websockets.client - DEBUG - > TEXT '{"type": "user_event", "data": {"message": {"na...stream_id": 75149874}}}' [137 bytes]
+2025-09-20 06:23:21,420 - Manager-680 - INFO - Sent initial tracking event for livestream 75149874
+2025-09-20 06:23:21,422 - websockets.client - DEBUG - = connection is CONNECTING
+2025-09-20 06:23:21,510 - websockets.client - DEBUG - < TEXT '{"type":"pong"}' [15 bytes]
+2025-09-20 06:23:21,511 - Manager-680 - DEBUG - Received: {"type":"pong"}
+2025-09-20 06:23:21,511 - Manager-680 - DEBUG - Received pong
+2025-09-20 06:23:21,517 - websockets.client - DEBUG - > GET /viewer/v1/connect?token=01K5JWN72CHH8B5M2JEJTNWPSF HTTP/1.1
+2025-09-20 06:23:21,519 - websockets.client - DEBUG - > Host: websockets.kick.com
+2025-09-20 06:23:21,519 - websockets.client - DEBUG - > Upgrade: websocket
+2025-09-20 06:23:21,520 - websockets.client - DEBUG - > Connection: Upgrade
+2025-09-20 06:23:21,520 - websockets.client - DEBUG - > Sec-WebSocket-Key: r50OODI2UH3mZ1521Ln5Mg==
+2025-09-20 06:23:21,520 - websockets.client - DEBUG - > Sec-WebSocket-Version: 13
+2025-09-20 06:23:21,520 - websockets.client - DEBUG - > Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits
+2025-09-20 06:23:21,520 - websockets.client - DEBUG - > User-Agent: Python/3.11 websockets/15.0.1
+2025-09-20 06:23:21,538 - urllib3.connectionpool - DEBUG - https://kick.com:443 "GET /api/v2/channels/musicislove HTTP/1.1" 200 None
+2025-09-20 06:23:21,539 - Manager-336 - DEBUG - Session established for musicislove (status: 200)
+2025-09-20 06:23:21,539 - Manager-336 - DEBUG - Fetching WebSocket token from: https://websockets.kick.com/viewer/v1/token
+2025-09-20 06:23:21,540 - urllib3.connectionpool - DEBUG - Starting new HTTPS connection (1): websockets.kick.com:443
+2025-09-20 06:23:21,681 - Manager-864 - DEBUG - Waiting to acquire IPv6 from pool...
+2025-09-20 06:23:21,682 - __main__ - DEBUG - Acquired IPv6: 2001:19f0:0:4f27:65f4:e75c:7c1c:45ae
+2025-09-20 06:23:21,682 - Manager-864 - INFO - Thread 864 acquired unique IPv6: 2001:19f0:0:4f27:65f4:e75c:7c1c:45ae for 'musicislove'
+2025-09-20 06:23:21,700 - urllib3.connectionpool - DEBUG - https://websockets.kick.com:443 "GET /viewer/v1/token HTTP/1.1" 200 None
+2025-09-20 06:23:21,733 - Manager-864 - DEBUG - Session attempt 1/5: Establishing session for channel_id 1457365
+2025-09-20 06:23:21,733 - Manager-864 - DEBUG - Establishing session via channel API: https://kick.com/api/v2/channels/musicislove
+2025-09-20 06:23:21,735 - urllib3.connectionpool - DEBUG - Starting new HTTPS connection (1): kick.com:443
+2025-09-20 06:23:21,735 - Manager-336 - DEBUG - Successfully retrieved WebSocket token
+2025-09-20 06:23:21,737 - Manager-336 - DEBUG - WebSocket connection attempt 1/3 for channel 1457365
+2025-09-20 06:23:21,744 - websockets.client - DEBUG - = connection is CONNECTING
+2025-09-20 06:23:21,843 - websockets.client - DEBUG - > GET /viewer/v1/connect?token=01K5JWN7HVV351Q56WMH04R14W HTTP/1.1
+2025-09-20 06:23:21,843 - websockets.client - DEBUG - > Host: websockets.kick.com
+2025-09-20 06:23:21,844 - websockets.client - DEBUG - > Upgrade: websocket
+2025-09-20 06:23:21,844 - websockets.client - DEBUG - > Connection: Upgrade
+2025-09-20 06:23:21,845 - websockets.client - DEBUG - > Sec-WebSocket-Key: 8bCVLlv7F8kcnYV8981EuQ==
+2025-09-20 06:23:21,845 - websockets.client - DEBUG - > Sec-WebSocket-Version: 13
+2025-09-20 06:23:21,845 - websockets.client - DEBUG - > Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits
+2025-09-20 06:23:21,845 - websockets.client - DEBUG - > User-Agent: Python/3.11 websockets/15.0.1
+2025-09-20 06:23:21,860 - websockets.client - DEBUG - < HTTP/1.1 101 Switching Protocols
+2025-09-20 06:23:21,860 - websockets.client - DEBUG - < Date: Sat, 20 Sep 2025 06:23:21 GMT
+2025-09-20 06:23:21,860 - websockets.client - DEBUG - < Connection: upgrade
+2025-09-20 06:23:21,861 - websockets.client - DEBUG - < Upgrade: websocket
+2025-09-20 06:23:21,861 - websockets.client - DEBUG - < Sec-WebSocket-Accept: RSMNZw16PbhJ/tyClbuNH5NJfBI=
+2025-09-20 06:23:21,861 - websockets.client - DEBUG - < cf-cache-status: DYNAMIC
+2025-09-20 06:23:21,861 - websockets.client - DEBUG - < Set-Cookie: __cf_bm=.JIvG36Z2_XsLVkXb2tx364ASX2JyMnKwVJsTLAUcnE-1758349401-1.0.1.1-pQHJMGsYkiYD1LKrq7epIG7YijPraAdFczG9jei7LCUUpsX4zhKlFr4mMonhIW5D3MaZA3BNufxMHI2UVHSWpqRUnY94WbEa9g4zTmaS9Kk; path=/; expires=Sat, 20-Sep-25 06:53:21 GMT; domain=.kick.com; HttpOnly; Secure; SameSite=None
+2025-09-20 06:23:21,861 - websockets.client - DEBUG - < Set-Cookie: _cfuvid=kR0pA2c8YNgWqbllrgiXD7llQUjiK7VePKDumNDzupU-1758349401858-0.0.1.1-604800000; path=/; domain=.kick.com; HttpOnly; Secure; SameSite=None
+2025-09-20 06:23:21,861 - websockets.client - DEBUG - < Server: cloudflare
+2025-09-20 06:23:21,861 - websockets.client - DEBUG - < CF-RAY: 981f3bcf8d947d14-EWR
+2025-09-20 06:23:21,862 - websockets.client - DEBUG - < alt-svc: h3=":443"; ma=86400
+2025-09-20 06:23:21,862 - websockets.client - DEBUG - = connection is OPEN
+2025-09-20 06:23:21,862 - Manager-216 - INFO - WebSocket connected for channel ID 1457365
+2025-09-20 06:23:21,862 - websockets.client - DEBUG - > TEXT '{"type": "channel_handshake", "data": {"message...hannelId": "1457365"}}}' [76 bytes]
+2025-09-20 06:23:21,863 - Manager-216 - DEBUG - Sent initial channel handshake
+2025-09-20 06:23:21,863 - websockets.client - DEBUG - > TEXT '{"type": "ping"}' [16 bytes]
+2025-09-20 06:23:21,863 - Manager-216 - DEBUG - Sent initial ping
+2025-09-20 06:23:21,864 - websockets.client - DEBUG - > TEXT '{"type": "user_event", "data": {"message": {"na...stream_id": 75149874}}}' [137 bytes]
+2025-09-20 06:23:21,864 - Manager-216 - INFO - Sent initial tracking event for livestream 75149874
+2025-09-20 06:23:21,876 - urllib3.connectionpool - DEBUG - https://kick.com:443 "GET /api/v2/channels/musicislove HTTP/1.1" 200 None
+2025-09-20 06:23:21,877 - Manager-864 - DEBUG - Session established for musicislove (status: 200)
+2025-09-20 06:23:21,877 - Manager-864 - DEBUG - Fetching WebSocket token from: https://websockets.kick.com/viewer/v1/token
+2025-09-20 06:23:21,878 - urllib3.connectionpool - DEBUG - Starting new HTTPS connection (1): websockets.kick.com:443
+2025-09-20 06:23:21,945 - websockets.client - DEBUG - < TEXT '{"type":"pong"}' [15 bytes]
+2025-09-20 06:23:21,945 - Manager-216 - DEBUG - Received: {"type":"pong"}
+2025-09-20 06:23:21,946 - Manager-216 - DEBUG - Received pong
+2025-09-20 06:23:22,114 - Manager-776 - DEBUG - Waiting to acquire IPv6 from pool...
+2025-09-20 06:23:22,115 - __main__ - DEBUG - Acquired IPv6: 2001:19f0:0:4f27:d394:3ea0:638d:bd71
+2025-09-20 06:23:22,115 - Manager-776 - INFO - Thread 776 acquired unique IPv6: 2001:19f0:0:4f27:d394:3ea0:638d:bd71 for 'musicislove'
+2025-09-20 06:23:22,164 - Manager-776 - DEBUG - Session attempt 1/5: Establishing session for channel_id 1457365
+2025-09-20 06:23:22,164 - Manager-776 - DEBUG - Establishing session via channel API: https://kick.com/api/v2/channels/musicislove
+2025-09-20 06:23:22,166 - urllib3.connectionpool - DEBUG - Starting new HTTPS connection (1): kick.com:443
+2025-09-20 06:23:22,262 - websockets.client - DEBUG - < HTTP/1.1 101 Switching Protocols
+2025-09-20 06:23:22,262 - websockets.client - DEBUG - < Date: Sat, 20 Sep 2025 06:23:22 GMT
+2025-09-20 06:23:22,263 - websockets.client - DEBUG - < Connection: upgrade
+2025-09-20 06:23:22,263 - websockets.client - DEBUG - < Upgrade: websocket
+2025-09-20 06:23:22,263 - websockets.client - DEBUG - < Sec-WebSocket-Accept: DAzKbVs1nNdKF5gu2IebR6kLMDY=
+2025-09-20 06:23:22,263 - websockets.client - DEBUG - < cf-cache-status: DYNAMIC
+2025-09-20 06:23:22,263 - websockets.client - DEBUG - < Set-Cookie: __cf_bm=l8IwFdrdkvJ_fFgG6ZeGik3XYWKUNZFnx5FXmNvpkwQ-1758349402-1.0.1.1-Vv9lGRnl2uE9Z3zaFNUwB.7iv19ZB.703.loxOfvlxONVQ8lXhjV61gBaiwx6dfNJV2ZRBOQ68r.5V61Or6c3zSvXSwWJfBn6uAVEWwJH_k; path=/; expires=Sat, 20-Sep-25 06:53:22 GMT; domain=.kick.com; HttpOnly; Secure; SameSite=None
+2025-09-20 06:23:22,263 - websockets.client - DEBUG - < Set-Cookie: _cfuvid=z0yhcPxYhO67xz0vwiIlRAadDgkWrbkdb9MkJzX9zMo-1758349402260-0.0.1.1-604800000; path=/; domain=.kick.com; HttpOnly; Secure; SameSite=None
+2025-09-20 06:23:22,264 - websockets.client - DEBUG - < Server: cloudflare
+2025-09-20 06:23:22,264 - websockets.client - DEBUG - < CF-RAY: 981f3bd18eb9e73e-EWR
+2025-09-20 06:23:22,264 - websockets.client - DEBUG - < alt-svc: h3=":443"; ma=86400
+2025-09-20 06:23:22,264 - websockets.client - DEBUG - = connection is OPEN
+2025-09-20 06:23:22,264 - Manager-336 - INFO - WebSocket connected for channel ID 1457365
+2025-09-20 06:23:22,265 - websockets.client - DEBUG - > TEXT '{"type": "channel_handshake", "data": {"message...hannelId": "1457365"}}}' [76 bytes]
+2025-09-20 06:23:22,265 - Manager-336 - DEBUG - Sent initial channel handshake
+2025-09-20 06:23:22,265 - websockets.client - DEBUG - > TEXT '{"type": "ping"}' [16 bytes]
+2025-09-20 06:23:22,265 - Manager-336 - DEBUG - Sent initial ping
+2025-09-20 06:23:22,266 - websockets.client - DEBUG - > TEXT '{"type": "user_event", "data": {"message": {"na...stream_id": 75149874}}}' [137 bytes]
+2025-09-20 06:23:22,266 - Manager-336 - INFO - Sent initial tracking event for livestream 75149874
+2025-09-20 06:23:22,268 - urllib3.connectionpool - DEBUG - https://kick.com:443 "GET /api/v2/channels/musicislove HTTP/1.1" 200 None
+2025-09-20 06:23:22,269 - Manager-776 - DEBUG - Session established for musicislove (status: 200)
+2025-09-20 06:23:22,269 - Manager-776 - DEBUG - Fetching WebSocket token from: https://websockets.kick.com/viewer/v1/token
+2025-09-20 06:23:22,270 - urllib3.connectionpool - DEBUG - Starting new HTTPS connection (1): websockets.kick.com:443
+2025-09-20 06:23:22,274 - urllib3.connectionpool - DEBUG - https://websockets.kick.com:443 "GET /viewer/v1/token HTTP/1.1" 200 None
+2025-09-20 06:23:22,276 - Manager-864 - DEBUG - Successfully retrieved WebSocket token
+2025-09-20 06:23:22,276 - Manager-864 - DEBUG - WebSocket connection attempt 1/3 for channel 1457365
+2025-09-20 06:23:22,280 - websockets.client - DEBUG - = connection is CONNECTING
+Status: ONLINE | Target: musicislove | Workers: 8/10 | Open Sockets: 5/10 | IPv6 Pool: 993/1001 | Failures: 0 | CPU: 68.0% | Memory: 34.6%   
+2025-09-20 06:23:22,369 - websockets.client - DEBUG - < TEXT '{"type":"pong"}' [15 bytes]
+2025-09-20 06:23:22,370 - Manager-336 - DEBUG - Received: {"type":"pong"}
+2025-09-20 06:23:22,371 - Manager-336 - DEBUG - Received pong
+2025-09-20 06:23:22,380 - websockets.client - DEBUG - > GET /viewer/v1/connect?token=01K5JWN83TQR4H0A1CB8XH9XZD HTTP/1.1
+2025-09-20 06:23:22,380 - websockets.client - DEBUG - > Host: websockets.kick.com
+2025-09-20 06:23:22,380 - websockets.client - DEBUG - > Upgrade: websocket
+2025-09-20 06:23:22,381 - websockets.client - DEBUG - > Connection: Upgrade
+2025-09-20 06:23:22,381 - websockets.client - DEBUG - > Sec-WebSocket-Key: CuWVP4TC9P46p1X/sjLipQ==
+2025-09-20 06:23:22,381 - websockets.client - DEBUG - > Sec-WebSocket-Version: 13
+2025-09-20 06:23:22,381 - websockets.client - DEBUG - > Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits
+2025-09-20 06:23:22,381 - websockets.client - DEBUG - > User-Agent: Python/3.11 websockets/15.0.1
+2025-09-20 06:23:22,480 - urllib3.connectionpool - DEBUG - https://websockets.kick.com:443 "GET /viewer/v1/token HTTP/1.1" 200 None
+2025-09-20 06:23:22,482 - Manager-776 - DEBUG - Successfully retrieved WebSocket token
+2025-09-20 06:23:22,482 - Manager-776 - DEBUG - WebSocket connection attempt 1/3 for channel 1457365
+2025-09-20 06:23:22,483 - Manager-128 - DEBUG - Waiting to acquire IPv6 from pool...
+2025-09-20 06:23:22,485 - __main__ - DEBUG - Acquired IPv6: 2001:19f0:0:4f27:367c:edf2:b33a:2435
+2025-09-20 06:23:22,485 - Manager-128 - INFO - Thread 128 acquired unique IPv6: 2001:19f0:0:4f27:367c:edf2:b33a:2435 for 'musicislove'
+2025-09-20 06:23:22,534 - Manager-128 - DEBUG - Session attempt 1/5: Establishing session for channel_id 1457365
+2025-09-20 06:23:22,535 - Manager-128 - DEBUG - Establishing session via channel API: https://kick.com/api/v2/channels/musicislove
+2025-09-20 06:23:22,536 - urllib3.connectionpool - DEBUG - Starting new HTTPS connection (1): kick.com:443
+2025-09-20 06:23:22,536 - websockets.client - DEBUG - = connection is CONNECTING
+2025-09-20 06:23:22,646 - websockets.client - DEBUG - > GET /viewer/v1/connect?token=01K5JWN8A00DVENYDAE458E2CA HTTP/1.1
+2025-09-20 06:23:22,650 - websockets.client - DEBUG - > Host: websockets.kick.com
+2025-09-20 06:23:22,650 - websockets.client - DEBUG - > Upgrade: websocket
+2025-09-20 06:23:22,650 - websockets.client - DEBUG - > Connection: Upgrade
+2025-09-20 06:23:22,650 - websockets.client - DEBUG - > Sec-WebSocket-Key: TRkFt2mX9f/xcPhk2avF4A==
+2025-09-20 06:23:22,651 - websockets.client - DEBUG - > Sec-WebSocket-Version: 13
+2025-09-20 06:23:22,651 - websockets.client - DEBUG - > Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits
+2025-09-20 06:23:22,651 - websockets.client - DEBUG - > User-Agent: Python/3.11 websockets/15.0.1
+2025-09-20 06:23:22,691 - urllib3.connectionpool - DEBUG - https://kick.com:443 "GET /api/v2/channels/musicislove HTTP/1.1" 200 None
+2025-09-20 06:23:22,692 - Manager-128 - DEBUG - Session established for musicislove (status: 200)
+2025-09-20 06:23:22,692 - Manager-128 - DEBUG - Fetching WebSocket token from: https://websockets.kick.com/viewer/v1/token
+2025-09-20 06:23:22,694 - urllib3.connectionpool - DEBUG - Starting new HTTPS connection (1): websockets.kick.com:443
+2025-09-20 06:23:22,723 - websockets.client - DEBUG - < HTTP/1.1 101 Switching Protocols
+2025-09-20 06:23:22,723 - websockets.client - DEBUG - < Date: Sat, 20 Sep 2025 06:23:22 GMT
+2025-09-20 06:23:22,723 - websockets.client - DEBUG - < Connection: upgrade
+2025-09-20 06:23:22,723 - websockets.client - DEBUG - < Upgrade: websocket
+2025-09-20 06:23:22,724 - websockets.client - DEBUG - < Sec-WebSocket-Accept: xZ/eJhGw6/6psNVNsaDUsa7g8qE=
+2025-09-20 06:23:22,724 - websockets.client - DEBUG - < cf-cache-status: DYNAMIC
+2025-09-20 06:23:22,724 - websockets.client - DEBUG - < Set-Cookie: __cf_bm=5t4PWXsOj5mRJtNKsBrDego7XdXoQNde5ovMntuziKU-1758349402-1.0.1.1-VTyAlKoqOqhNcZh9mAzcm3o.gZ_2GPB04mVlh9A..ufv2s8QsE0wwGHq70DIbqiS_JiVk7dvrSCYiVslEPIhqlC2vpJrrvKhaTr0wjMjDaY; path=/; expires=Sat, 20-Sep-25 06:53:22 GMT; domain=.kick.com; HttpOnly; Secure; SameSite=None
+2025-09-20 06:23:22,724 - websockets.client - DEBUG - < Set-Cookie: _cfuvid=MvZIL.ny9F6m75VwgYS8y5J2h4wyUCTHBRD9uupY3pY-1758349402721-0.0.1.1-604800000; path=/; domain=.kick.com; HttpOnly; Secure; SameSite=None
+2025-09-20 06:23:22,724 - websockets.client - DEBUG - < Server: cloudflare
+2025-09-20 06:23:22,724 - websockets.client - DEBUG - < CF-RAY: 981f3bd4ebb84252-EWR
+2025-09-20 06:23:22,724 - websockets.client - DEBUG - < alt-svc: h3=":443"; ma=86400
+2025-09-20 06:23:22,725 - websockets.client - DEBUG - = connection is OPEN
+2025-09-20 06:23:22,725 - Manager-864 - INFO - WebSocket connected for channel ID 1457365
+2025-09-20 06:23:22,725 - websockets.client - DEBUG - > TEXT '{"type": "channel_handshake", "data": {"message...hannelId": "1457365"}}}' [76 bytes]
+2025-09-20 06:23:22,726 - Manager-864 - DEBUG - Sent initial channel handshake
+2025-09-20 06:23:22,726 - websockets.client - DEBUG - > TEXT '{"type": "ping"}' [16 bytes]
+2025-09-20 06:23:22,726 - Manager-864 - DEBUG - Sent initial ping
+2025-09-20 06:23:22,726 - websockets.client - DEBUG - > TEXT '{"type": "user_event", "data": {"message": {"na...stream_id": 75149874}}}' [137 bytes]
+2025-09-20 06:23:22,727 - Manager-864 - INFO - Sent initial tracking event for livestream 75149874
+2025-09-20 06:23:22,810 - websockets.client - DEBUG - < TEXT '{"type":"pong"}' [15 bytes]
+2025-09-20 06:23:22,811 - Manager-864 - DEBUG - Received: {"type":"pong"}
+2025-09-20 06:23:22,811 - Manager-864 - DEBUG - Received pong
+2025-09-20 06:23:22,851 - urllib3.connectionpool - DEBUG - https://websockets.kick.com:443 "GET /viewer/v1/token HTTP/1.1" 200 None
+2025-09-20 06:23:22,852 - Manager-128 - DEBUG - Successfully retrieved WebSocket token
+2025-09-20 06:23:22,852 - Manager-128 - DEBUG - WebSocket connection attempt 1/3 for channel 1457365
+2025-09-20 06:23:22,860 - websockets.client - DEBUG - = connection is CONNECTING
+2025-09-20 06:23:22,912 - websockets.client - DEBUG - > GET /viewer/v1/connect?token=01K5JWN8NQN8WWCMTBS6DVPXXW HTTP/1.1
+2025-09-20 06:23:22,913 - websockets.client - DEBUG - > Host: websockets.kick.com
+2025-09-20 06:23:22,913 - websockets.client - DEBUG - > Upgrade: websocket
+2025-09-20 06:23:22,913 - websockets.client - DEBUG - > Connection: Upgrade
+2025-09-20 06:23:22,913 - websockets.client - DEBUG - > Sec-WebSocket-Key: fhCTQEkJYMmjbJ2WV3idsQ==
+2025-09-20 06:23:22,913 - websockets.client - DEBUG - > Sec-WebSocket-Version: 13
+2025-09-20 06:23:22,913 - websockets.client - DEBUG - > Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits
+2025-09-20 06:23:22,914 - websockets.client - DEBUG - > User-Agent: Python/3.11 websockets/15.0.1
+2025-09-20 06:23:22,921 - Manager-384 - DEBUG - Waiting to acquire IPv6 from pool...
+2025-09-20 06:23:22,921 - __main__ - DEBUG - Acquired IPv6: 2001:19f0:0:4f27:3fdd:c7b9:9814:fef4
+2025-09-20 06:23:22,922 - Manager-384 - INFO - Thread 384 acquired unique IPv6: 2001:19f0:0:4f27:3fdd:c7b9:9814:fef4 for 'musicislove'
+2025-09-20 06:23:22,970 - Manager-384 - DEBUG - Session attempt 1/5: Establishing session for channel_id 1457365
+2025-09-20 06:23:22,970 - Manager-384 - DEBUG - Establishing session via channel API: https://kick.com/api/v2/channels/musicislove
+2025-09-20 06:23:22,971 - urllib3.connectionpool - DEBUG - Starting new HTTPS connection (1): kick.com:443
+2025-09-20 06:23:23,033 - websockets.client - DEBUG - < HTTP/1.1 101 Switching Protocols
+2025-09-20 06:23:23,033 - websockets.client - DEBUG - < Date: Sat, 20 Sep 2025 06:23:23 GMT
+2025-09-20 06:23:23,034 - websockets.client - DEBUG - < Connection: upgrade
+2025-09-20 06:23:23,034 - websockets.client - DEBUG - < Upgrade: websocket
+2025-09-20 06:23:23,034 - websockets.client - DEBUG - < Sec-WebSocket-Accept: rV34Iyfa0syAS04s1u6/k6Scljk=
+2025-09-20 06:23:23,034 - websockets.client - DEBUG - < cf-cache-status: DYNAMIC
+2025-09-20 06:23:23,034 - websockets.client - DEBUG - < Set-Cookie: __cf_bm=eMjYpU3UXdFMdBSPZlWOHNBYKCvUVb.Yx3u7Lt7exVs-1758349403-1.0.1.1-.23g0V4OjKXPx8irA7AnEdov8bNhr2rYOFQSck_NNtL_ROMw9tp8p2ipL7wWdBglKC.QUtUi0WnFUu17XO_QFu2_Ftz5w7VjG0n_tbW3Ryo; path=/; expires=Sat, 20-Sep-25 06:53:23 GMT; domain=.kick.com; HttpOnly; Secure; SameSite=None
+2025-09-20 06:23:23,034 - websockets.client - DEBUG - < Set-Cookie: _cfuvid=Q59kSPNUSu41Of_JfYi.EahLJgnVt_Z2j3yOYbItps0-1758349403031-0.0.1.1-604800000; path=/; domain=.kick.com; HttpOnly; Secure; SameSite=None
+2025-09-20 06:23:23,035 - websockets.client - DEBUG - < Server: cloudflare
+2025-09-20 06:23:23,035 - websockets.client - DEBUG - < CF-RAY: 981f3bd698b6cdf0-EWR
+2025-09-20 06:23:23,035 - websockets.client - DEBUG - < alt-svc: h3=":443"; ma=86400
+2025-09-20 06:23:23,035 - websockets.client - DEBUG - = connection is OPEN
+2025-09-20 06:23:23,035 - Manager-776 - INFO - WebSocket connected for channel ID 1457365
+2025-09-20 06:23:23,036 - websockets.client - DEBUG - > TEXT '{"type": "channel_handshake", "data": {"message...hannelId": "1457365"}}}' [76 bytes]
+2025-09-20 06:23:23,036 - Manager-776 - DEBUG - Sent initial channel handshake
+2025-09-20 06:23:23,036 - websockets.client - DEBUG - > TEXT '{"type": "ping"}' [16 bytes]
+2025-09-20 06:23:23,036 - Manager-776 - DEBUG - Sent initial ping
+2025-09-20 06:23:23,037 - websockets.client - DEBUG - > TEXT '{"type": "user_event", "data": {"message": {"na...stream_id": 75149874}}}' [137 bytes]
+2025-09-20 06:23:23,037 - Manager-776 - INFO - Sent initial tracking event for livestream 75149874
+2025-09-20 06:23:23,048 - urllib3.connectionpool - DEBUG - https://kick.com:443 "GET /api/v2/channels/musicislove HTTP/1.1" 200 None
+2025-09-20 06:23:23,049 - Manager-384 - DEBUG - Session established for musicislove (status: 200)
+2025-09-20 06:23:23,049 - Manager-384 - DEBUG - Fetching WebSocket token from: https://websockets.kick.com/viewer/v1/token
+2025-09-20 06:23:23,051 - urllib3.connectionpool - DEBUG - Starting new HTTPS connection (1): websockets.kick.com:443
+2025-09-20 06:23:23,137 - websockets.client - DEBUG - < TEXT '{"type":"pong"}' [15 bytes]
+2025-09-20 06:23:23,137 - Manager-776 - DEBUG - Received: {"type":"pong"}
+2025-09-20 06:23:23,138 - Manager-776 - DEBUG - Received pong
+2025-09-20 06:23:23,208 - urllib3.connectionpool - DEBUG - https://websockets.kick.com:443 "GET /viewer/v1/token HTTP/1.1" 200 None
+2025-09-20 06:23:23,209 - Manager-384 - DEBUG - Successfully retrieved WebSocket token
+2025-09-20 06:23:23,210 - Manager-384 - DEBUG - WebSocket connection attempt 1/3 for channel 1457365
+2025-09-20 06:23:23,215 - websockets.client - DEBUG - = connection is CONNECTING
+2025-09-20 06:23:23,267 - websockets.client - DEBUG - > GET /viewer/v1/connect?token=01K5JWN90YVKQEQG6G9DMWEFK5 HTTP/1.1
+2025-09-20 06:23:23,267 - websockets.client - DEBUG - > Host: websockets.kick.com
+2025-09-20 06:23:23,267 - websockets.client - DEBUG - > Upgrade: websocket
+2025-09-20 06:23:23,267 - websockets.client - DEBUG - > Connection: Upgrade
+2025-09-20 06:23:23,267 - websockets.client - DEBUG - > Sec-WebSocket-Key: h/ExxZzn5MxN3fJpRUtDIw==
+2025-09-20 06:23:23,268 - websockets.client - DEBUG - > Sec-WebSocket-Version: 13
+2025-09-20 06:23:23,268 - websockets.client - DEBUG - > Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits
+2025-09-20 06:23:23,268 - websockets.client - DEBUG - > User-Agent: Python/3.11 websockets/15.0.1
+2025-09-20 06:23:23,296 - websockets.client - DEBUG - < HTTP/1.1 101 Switching Protocols
+2025-09-20 06:23:23,296 - websockets.client - DEBUG - < Date: Sat, 20 Sep 2025 06:23:23 GMT
+2025-09-20 06:23:23,297 - websockets.client - DEBUG - < Connection: upgrade
+2025-09-20 06:23:23,297 - websockets.client - DEBUG - < Upgrade: websocket
+2025-09-20 06:23:23,297 - websockets.client - DEBUG - < Sec-WebSocket-Accept: ePtXstjRjmWRU4hHiyv4ig8HKJE=
+2025-09-20 06:23:23,297 - websockets.client - DEBUG - < cf-cache-status: DYNAMIC
+2025-09-20 06:23:23,297 - websockets.client - DEBUG - < Set-Cookie: __cf_bm=G9TP5ZYrlM.xK5wrAMqWi14Viyt5X6LrJMC6beygjJU-1758349403-1.0.1.1-0vKuuyIpfd10VJq3XCrYx0TvxdVuf_TUVKBdaffCVaPfcohsLWFWn1KAFY40jLhjkMCJLuTundUr6DUa.WFpGjxs9f8PpCg.4Sfb0Y3T.oE; path=/; expires=Sat, 20-Sep-25 06:53:23 GMT; domain=.kick.com; HttpOnly; Secure; SameSite=None
+2025-09-20 06:23:23,297 - websockets.client - DEBUG - < Set-Cookie: _cfuvid=DLImx1bw59PbEh3NGoi258tCjUMkyvdxgE9cdTSMB5M-1758349403294-0.0.1.1-604800000; path=/; domain=.kick.com; HttpOnly; Secure; SameSite=None
+2025-09-20 06:23:23,298 - websockets.client - DEBUG - < Server: cloudflare
+2025-09-20 06:23:23,298 - websockets.client - DEBUG - < CF-RAY: 981f3bd83868efa7-EWR
+2025-09-20 06:23:23,298 - websockets.client - DEBUG - < alt-svc: h3=":443"; ma=86400
+2025-09-20 06:23:23,298 - websockets.client - DEBUG - = connection is OPEN
+2025-09-20 06:23:23,298 - Manager-128 - INFO - WebSocket connected for channel ID 1457365
+2025-09-20 06:23:23,299 - websockets.client - DEBUG - > TEXT '{"type": "channel_handshake", "data": {"message...hannelId": "1457365"}}}' [76 bytes]
+2025-09-20 06:23:23,299 - Manager-128 - DEBUG - Sent initial channel handshake
+2025-09-20 06:23:23,299 - websockets.client - DEBUG - > TEXT '{"type": "ping"}' [16 bytes]
+2025-09-20 06:23:23,299 - Manager-128 - DEBUG - Sent initial ping
+2025-09-20 06:23:23,300 - websockets.client - DEBUG - > TEXT '{"type": "user_event", "data": {"message": {"na...stream_id": 75149874}}}' [137 bytes]
+2025-09-20 06:23:23,300 - Manager-128 - INFO - Sent initial tracking event for livestream 75149874
+Status: ONLINE | Target: musicislove | Workers: 10/10 | Open Sockets: 8/10 | IPv6 Pool: 991/1001 | Failures: 0 | CPU: 52.0% | Memory: 34.6%   
+2025-09-20 06:23:23,391 - websockets.client - DEBUG - < TEXT '{"type":"pong"}' [15 bytes]
+2025-09-20 06:23:23,392 - Manager-128 - DEBUG - Received: {"type":"pong"}
+2025-09-20 06:23:23,392 - Manager-128 - DEBUG - Received pong
+2025-09-20 06:23:23,584 - websockets.client - DEBUG - < HTTP/1.1 101 Switching Protocols
+2025-09-20 06:23:23,584 - websockets.client - DEBUG - < Date: Sat, 20 Sep 2025 06:23:23 GMT
+2025-09-20 06:23:23,584 - websockets.client - DEBUG - < Connection: upgrade
+2025-09-20 06:23:23,584 - websockets.client - DEBUG - < Upgrade: websocket
+2025-09-20 06:23:23,584 - websockets.client - DEBUG - < Sec-WebSocket-Accept: poAbOO6xtQrAR1qCPeqndWISTfw=
+2025-09-20 06:23:23,584 - websockets.client - DEBUG - < cf-cache-status: DYNAMIC
+2025-09-20 06:23:23,584 - websockets.client - DEBUG - < Set-Cookie: __cf_bm=YLTfnme5Wfk437uaG3_VR4PB6XPRJOJUU2ySDFZZut0-1758349403-1.0.1.1-rKpg6noVKuCPKmkyf0AnrG..TrslphWfenBEgVi.bQCHmIHQ5G2sg7MIYCQb_D6x1.uTXHm4Jdq177JAVviWtqQsDMf6.YHVlViufCAfbrA; path=/; expires=Sat, 20-Sep-25 06:53:23 GMT; domain=.kick.com; HttpOnly; Secure; SameSite=None
+2025-09-20 06:23:23,584 - websockets.client - DEBUG - < Set-Cookie: _cfuvid=REWF1Zvcwbw_TioOu4d0HFcq8LB5ajXQvOfCJkHtWAM-1758349403581-0.0.1.1-604800000; path=/; domain=.kick.com; HttpOnly; Secure; SameSite=None
+2025-09-20 06:23:23,584 - websockets.client - DEBUG - < Server: cloudflare
+2025-09-20 06:23:23,584 - websockets.client - DEBUG - < CF-RAY: 981f3bda7ffd42ec-EWR
+2025-09-20 06:23:23,584 - websockets.client - DEBUG - < alt-svc: h3=":443"; ma=86400
+2025-09-20 06:23:23,584 - websockets.client - DEBUG - = connection is OPEN
+2025-09-20 06:23:23,584 - Manager-384 - INFO - WebSocket connected for channel ID 1457365
+2025-09-20 06:23:23,585 - websockets.client - DEBUG - > TEXT '{"type": "channel_handshake", "data": {"message...hannelId": "1457365"}}}' [76 bytes]
+2025-09-20 06:23:23,585 - Manager-384 - DEBUG - Sent initial channel handshake
+2025-09-20 06:23:23,585 - websockets.client - DEBUG - > TEXT '{"type": "ping"}' [16 bytes]
+2025-09-20 06:23:23,585 - Manager-384 - DEBUG - Sent initial ping
+2025-09-20 06:23:23,585 - websockets.client - DEBUG - > TEXT '{"type": "user_event", "data": {"message": {"na...stream_id": 75149874}}}' [137 bytes]
+2025-09-20 06:23:23,585 - Manager-384 - INFO - Sent initial tracking event for livestream 75149874
+2025-09-20 06:23:23,661 - websockets.client - DEBUG - < TEXT '{"type":"pong"}' [15 bytes]
+2025-09-20 06:23:23,662 - Manager-384 - DEBUG - Received: {"type":"pong"}
+2025-09-20 06:23:23,662 - Manager-384 - DEBUG - Received pong
+Status: ONLINE | Target: musicislove | Workers: 10/10 | Open Sockets: 9/10 | IPv6 Pool: 991/1001 | Failures: 0 | CPU: 2.0% | Memory: 34.6%   
+Status: ONLINE | Target: musicislove | Workers: 10/10 | Open Sockets: 9/10 | IPv6 Pool: 991/1001 | Failures: 0 | CPU: 2.0% | Memory: 34.6%   
+Status: ONLINE | Target: musicislove | Workers: 10/10 | Open Sockets: 9/10 | IPv6 Pool: 991/1001 | Failures: 0 | CPU: 2.0% | Memory: 34.6%   
+Status: ONLINE | Target: musicislove | Workers: 10/10 | Open Sockets: 9/10 | IPv6 Pool: 991/1001 | Failures: 0 | CPU: 2.0% | Memory: 34.6%   
+Status: ONLINE | Target: musicislove | Workers: 10/10 | Open Sockets: 9/10 | IPv6 Pool: 991/1001 | Failures: 0 | CPU: 0.0% | Memory: 34.6%   
+Status: ONLINE | Target: musicislove | Workers: 10/10 | Open Sockets: 9/10 | IPv6 Pool: 991/1001 | Failures: 0 | CPU: 3.0% | Memory: 34.6%   
+Status: ONLINE | Target: musicislove | Workers: 10/10 | Open Sockets: 9/10 | IPv6 Pool: 991/1001 | Failures: 0 | CPU: 1.0% | Memory: 34.6%   
+Status: ONLINE | Target: musicislove | Workers: 10/10 | Open Sockets: 9/10 | IPv6 Pool: 991/1001 | Failures: 0 | CPU: 2.0% | Memory: 34.6%   
+Status: ONLINE | Target: musicislove | Workers: 10/10 | Open Sockets: 9/10 | IPv6 Pool: 991/1001 | Failures: 0 | CPU: 2.0% | Memory: 36.3%   
+Status: ONLINE | Target: musicislove | Workers: 10/10 | Open Sockets: 9/10 | IPv6 Pool: 991/1001 | Failures: 0 | CPU: 2.0% | Memory: 36.3%   
+Status: ONLINE | Target: musicislove | Workers: 10/10 | Open Sockets: 9/10 | IPv6 Pool: 991/1001 | Failures: 0 | CPU: 2.0% | Memory: 36.3%   
+Status: ONLINE | Target: musicislove | Workers: 10/10 | Open Sockets: 9/10 | IPv6 Pool: 991/1001 | Failures: 0 | CPU: 3.0% | Memory: 36.3%   
+2025-09-20 06:23:35,559 - websockets.client - DEBUG - > TEXT '{"type": "channel_handshake", "data": {"message...hannelId": "1457365"}}}' [76 bytes]
+2025-09-20 06:23:35,560 - Manager-232 - DEBUG - Sent periodic handshake
+2025-09-20 06:23:35,914 - websockets.client - DEBUG - > TEXT '{"type": "channel_handshake", "data": {"message...hannelId": "1457365"}}}' [76 bytes]
+2025-09-20 06:23:35,914 - Manager-768 - DEBUG - Sent periodic handshake
+Status: ONLINE | Target: musicislove | Workers: 10/10 | Open Sockets: 9/10 | IPv6 Pool: 991/1001 | Failures: 0 | CPU: 2.0% | Memory: 36.3%   
+2025-09-20 06:23:36,420 - websockets.client - DEBUG - > TEXT '{"type": "channel_handshake", "data": {"message...hannelId": "1457365"}}}' [76 bytes]
+2025-09-20 06:23:36,421 - Manager-680 - DEBUG - Sent periodic handshake
+2025-09-20 06:23:36,865 - websockets.client - DEBUG - > TEXT '{"type": "channel_handshake", "data": {"message...hannelId": "1457365"}}}' [76 bytes]
+2025-09-20 06:23:36,865 - Manager-216 - DEBUG - Sent periodic handshake
+2025-09-20 06:23:37,267 - websockets.client - DEBUG - > TEXT '{"type": "channel_handshake", "data": {"message...hannelId": "1457365"}}}' [76 bytes]
+2025-09-20 06:23:37,268 - Manager-336 - DEBUG - Sent periodic handshake
+Status: ONLINE | Target: musicislove | Workers: 10/10 | Open Sockets: 9/10 | IPv6 Pool: 991/1001 | Failures: 0 | CPU: 0.0% | Memory: 36.3%   
+2025-09-20 06:23:37,727 - websockets.client - DEBUG - > TEXT '{"type": "channel_handshake", "data": {"message...hannelId": "1457365"}}}' [76 bytes]
+2025-09-20 06:23:37,728 - Manager-864 - DEBUG - Sent periodic handshake
+2025-09-20 06:23:38,038 - websockets.client - DEBUG - > TEXT '{"type": "channel_handshake", "data": {"message...hannelId": "1457365"}}}' [76 bytes]
+2025-09-20 06:23:38,038 - Manager-776 - DEBUG - Sent periodic handshake
+2025-09-20 06:23:38,301 - websockets.client - DEBUG - > TEXT '{"type": "channel_handshake", "data": {"message...hannelId": "1457365"}}}' [76 bytes]
+2025-09-20 06:23:38,302 - Manager-128 - DEBUG - Sent periodic handshake
+Status: ONLINE | Target: musicislove | Workers: 10/10 | Open Sockets: 9/10 | IPv6 Pool: 991/1001 | Failures: 0 | CPU: 4.0% | Memory: 36.3%   
+2025-09-20 06:23:38,586 - websockets.client - DEBUG - > TEXT '{"type": "channel_handshake", "data": {"message...hannelId": "1457365"}}}' [76 bytes]
+2025-09-20 06:23:38,587 - Manager-384 - DEBUG - Sent periodic handshake
+Status: ONLINE | Target: musicislove | Workers: 10/10 | Open Sockets: 9/10 | IPv6 Pool: 991/1001 | Failures: 0 | CPU: 1.0% | Memory: 36.2%   
+Status: ONLINE | Target: musicislove | Workers: 10/10 | Open Sockets: 9/10 | IPv6 Pool: 991/1001 | Failures: 0 | CPU: 1.0% | Memory: 36.2%   
+2025-09-20 06:23:40,559 - websockets.client - DEBUG - > PING 0b 9c 6f bf [binary, 4 bytes]
+2025-09-20 06:23:40,560 - websockets.client - DEBUG - % sent keepalive ping
+2025-09-20 06:23:40,634 - websockets.client - DEBUG - < PONG 0b 9c 6f bf [binary, 4 bytes]
+2025-09-20 06:23:40,635 - websockets.client - DEBUG - % received keepalive pong
+2025-09-20 06:23:40,913 - websockets.client - DEBUG - > PING cd e2 58 f1 [binary, 4 bytes]
+2025-09-20 06:23:40,914 - websockets.client - DEBUG - % sent keepalive ping
+2025-09-20 06:23:41,008 - websockets.client - DEBUG - < PONG cd e2 58 f1 [binary, 4 bytes]
+2025-09-20 06:23:41,008 - websockets.client - DEBUG - % received keepalive pong
+Status: ONLINE | Target: musicislove | Workers: 10/10 | Open Sockets: 9/10 | IPv6 Pool: 991/1001 | Failures: 0 | CPU: 2.0% | Memory: 36.2%   
+2025-09-20 06:23:41,420 - websockets.client - DEBUG - > PING 9b 80 55 5a [binary, 4 bytes]
+2025-09-20 06:23:41,421 - websockets.client - DEBUG - % sent keepalive ping
+2025-09-20 06:23:41,508 - websockets.client - DEBUG - < PONG 9b 80 55 5a [binary, 4 bytes]
+2025-09-20 06:23:41,509 - websockets.client - DEBUG - % received keepalive pong
+2025-09-20 06:23:41,864 - websockets.client - DEBUG - > PING d0 2f 5a e7 [binary, 4 bytes]
+2025-09-20 06:23:41,865 - websockets.client - DEBUG - % sent keepalive ping
+2025-09-20 06:23:41,948 - websockets.client - DEBUG - < PONG d0 2f 5a e7 [binary, 4 bytes]
+2025-09-20 06:23:41,949 - websockets.client - DEBUG - % received keepalive pong
+2025-09-20 06:23:42,267 - websockets.client - DEBUG - > PING ec 18 3e 36 [binary, 4 bytes]
+2025-09-20 06:23:42,268 - websockets.client - DEBUG - % sent keepalive ping
+2025-09-20 06:23:42,371 - websockets.client - DEBUG - < PONG ec 18 3e 36 [binary, 4 bytes]
+2025-09-20 06:23:42,372 - websockets.client - DEBUG - % received keepalive pong
+Status: ONLINE | Target: musicislove | Workers: 10/10 | Open Sockets: 9/10 | IPv6 Pool: 991/1001 | Failures: 0 | CPU: 3.0% | Memory: 36.2%   
+2025-09-20 06:23:42,728 - websockets.client - DEBUG - > PING 42 e4 91 73 [binary, 4 bytes]
+2025-09-20 06:23:42,728 - websockets.client - DEBUG - % sent keepalive ping
+2025-09-20 06:23:42,812 - websockets.client - DEBUG - < PONG 42 e4 91 73 [binary, 4 bytes]
+2025-09-20 06:23:42,813 - websockets.client - DEBUG - % received keepalive pong
+2025-09-20 06:23:43,037 - websockets.client - DEBUG - > PING 03 3b 2d fb [binary, 4 bytes]
+2025-09-20 06:23:43,038 - websockets.client - DEBUG - % sent keepalive ping
+2025-09-20 06:23:43,138 - websockets.client - DEBUG - < PONG 03 3b 2d fb [binary, 4 bytes]
+2025-09-20 06:23:43,139 - websockets.client - DEBUG - % received keepalive pong
+2025-09-20 06:23:43,301 - websockets.client - DEBUG - > PING 'x킡' [text, 4 bytes]
+2025-09-20 06:23:43,301 - websockets.client - DEBUG - % sent keepalive ping
+2025-09-20 06:23:43,393 - websockets.client - DEBUG - < PONG 'x킡' [text, 4 bytes]
+2025-09-20 06:23:43,393 - websockets.client - DEBUG - % received keepalive pong
+Status: ONLINE | Target: musicislove | Workers: 10/10 | Open Sockets: 9/10 | IPv6 Pool: 991/1001 | Failures: 0 | CPU: 3.0% | Memory: 36.7%   
+2025-09-20 06:23:43,586 - websockets.client - DEBUG - > PING 91 a1 b3 8d [binary, 4 bytes]
+2025-09-20 06:23:43,586 - websockets.client - DEBUG - % sent keepalive ping
+2025-09-20 06:23:43,662 - websockets.client - DEBUG - < PONG 91 a1 b3 8d [binary, 4 bytes]
+2025-09-20 06:23:43,663 - websockets.client - DEBUG - % received keepalive pong
+Status: ONLINE | Target: musicislove | Workers: 10/10 | Open Sockets: 9/10 | IPv6 Pool: 991/1001 | Failures: 0 | CPU: 1.0% | Memory: 36.7%   
+Status: ONLINE | Target: musicislove | Workers: 10/10 | Open Sockets: 9/10 | IPv6 Pool: 991/1001 | Failures: 0 | CPU: 3.0% | Memory: 36.7%   
+Status: ONLINE | Target: musicislove | Workers: 10/10 | Open Sockets: 9/10 | IPv6 Pool: 991/1001 | Failures: 0 | CPU: 2.0% | Memory: 36.7%   
+Status: ONLINE | Target: musicislove | Workers: 10/10 | Open Sockets: 9/10 | IPv6 Pool: 991/1001 | Failures: 0 | CPU: 1.0% | Memory: 36.7%   
+Status: ONLINE | Target: musicislove | Workers: 10/10 | Open Sockets: 9/10 | IPv6 Pool: 991/1001 | Failures: 0 | CPU: 3.0% | Memory: 36.7%   
+Status: ONLINE | Target: musicislove | Workers: 10/10 | Open Sockets: 9/10 | IPv6 Pool: 991/1001 | Failures: 0 | CPU: 2.0% | Memory: 36.7%  
