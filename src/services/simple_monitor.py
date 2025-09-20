@@ -176,9 +176,11 @@ class SimpleMonitorService:
             is_live = livestream and livestream.get('is_live', False)
             new_status = 'online' if is_live else 'offline'
 
-            # Extract viewer count and livestream ID for analytics
+            # Extract viewer count, livestream ID, and channel ID for analytics
             viewer_count = None
             livestream_id = None
+            channel_id = data.get('id') or data.get('channel_id')  # Get channel_id from root of data
+
             if livestream and is_live:
                 viewer_count = livestream.get('viewer_count') or livestream.get('viewers')
                 livestream_id = livestream.get('id')
@@ -210,10 +212,10 @@ class SimpleMonitorService:
 
             if status_changed:
                 # Status actually changed - use full status update
-                await self._update_streamer_status(streamer, new_status, viewer_count, livestream_id)
+                await self._update_streamer_status(streamer, new_status, viewer_count, livestream_id, channel_id)
             elif viewer_count is not None:
                 # Status same but we have viewer data to update
-                await self._update_viewer_data_only(streamer, viewer_count, livestream_id)
+                await self._update_viewer_data_only(streamer, viewer_count, livestream_id, channel_id)
 
             # Update profile information if we have any changes
             if profile_updates:
@@ -231,7 +233,8 @@ class SimpleMonitorService:
     
     async def _update_streamer_status(self, streamer: Streamer, new_status: str,
                                      viewer_count: Optional[int] = None,
-                                     livestream_id: Optional[int] = None):
+                                     livestream_id: Optional[int] = None,
+                                     channel_id: Optional[int] = None):
         """Update streamer status in database with viewer count."""
         try:
             # Convert string to enum
@@ -260,7 +263,7 @@ class SimpleMonitorService:
                 # Update viewer statistics if we have viewer data
                 if viewer_count is not None and new_status == 'online':
                     await self.database_service.update_streamer_viewer_stats(
-                        streamer.id, viewer_count, livestream_id
+                        streamer.id, viewer_count, livestream_id, channel_id
                     )
 
                 # Create status event with viewer count
@@ -294,13 +297,15 @@ class SimpleMonitorService:
         except Exception as e:
             logger.error(f"Error updating {streamer.username} status: {e}")
     
-    async def _update_viewer_data_only(self, streamer: Streamer, viewer_count: int, livestream_id: Optional[int] = None):
+    async def _update_viewer_data_only(self, streamer: Streamer, viewer_count: int,
+                                      livestream_id: Optional[int] = None,
+                                      channel_id: Optional[int] = None):
         """Update only viewer data without changing status."""
         try:
             # Update viewer statistics in database
             if viewer_count is not None:
                 await self.database_service.update_streamer_viewer_stats(
-                    streamer.id, viewer_count, livestream_id
+                    streamer.id, viewer_count, livestream_id, channel_id
                 )
 
                 # Create a viewer tracking event for analytics without status validation

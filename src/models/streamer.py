@@ -56,6 +56,7 @@ class StreamerBase(BaseModel):
     peak_viewers: Optional[int] = Field(None, description="Peak viewer count during current/last stream")
     avg_viewers: Optional[int] = Field(None, description="Average viewer count across all streams")
     livestream_id: Optional[int] = Field(None, description="Current livestream ID from Kick API")
+    channel_id: Optional[int] = Field(None, description="Channel ID from Kick API")
     
     @validator('username')
     def validate_username(cls, v):
@@ -97,6 +98,13 @@ class StreamerBase(BaseModel):
         """Validate livestream_id is positive if provided."""
         if v is not None and v <= 0:
             raise ValueError("Livestream ID must be positive")
+        return v
+
+    @validator('channel_id')
+    def validate_channel_id(cls, v):
+        """Validate channel_id is positive if provided."""
+        if v is not None and v <= 0:
+            raise ValueError("Channel ID must be positive")
         return v
 
     @model_validator(mode='before')

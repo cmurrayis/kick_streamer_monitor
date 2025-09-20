@@ -227,8 +227,10 @@ class DatabaseService:
                 query = """
                 INSERT INTO streamer (kick_user_id, username, display_name, status, is_active)
                 VALUES ($1, $2, $3, $4, $5)
-                RETURNING id, kick_user_id, username, display_name, status, 
-                         last_seen_online, last_status_update, created_at, updated_at, is_active
+                RETURNING id, kick_user_id, username, display_name, status,
+                         last_seen_online, last_status_update, created_at, updated_at, is_active,
+                         current_viewers, peak_viewers, avg_viewers, livestream_id, channel_id,
+                         profile_picture_url, bio, follower_count, is_live, is_verified
                 """
                 
                 record = await conn.fetchrow(
@@ -272,11 +274,13 @@ class DatabaseService:
         """Get streamer by ID."""
         async with self.get_connection() as conn:
             query = """
-            SELECT id, kick_user_id, username, display_name, status, 
-                   last_seen_online, last_status_update, created_at, updated_at, is_active
+            SELECT id, kick_user_id, username, display_name, status,
+                   last_seen_online, last_status_update, created_at, updated_at, is_active,
+                   current_viewers, peak_viewers, avg_viewers, livestream_id, channel_id,
+                   profile_picture_url, bio, follower_count, is_live, is_verified
             FROM streamer WHERE id = $1
             """
-            
+
             record = await conn.fetchrow(query, streamer_id)
             return Streamer(**dict(record)) if record else None
     
@@ -284,11 +288,13 @@ class DatabaseService:
         """Get streamer by username."""
         async with self.get_connection() as conn:
             query = """
-            SELECT id, kick_user_id, username, display_name, status, 
-                   last_seen_online, last_status_update, created_at, updated_at, is_active
+            SELECT id, kick_user_id, username, display_name, status,
+                   last_seen_online, last_status_update, created_at, updated_at, is_active,
+                   current_viewers, peak_viewers, avg_viewers, livestream_id, channel_id,
+                   profile_picture_url, bio, follower_count, is_live, is_verified
             FROM streamer WHERE username = $1
             """
-            
+
             record = await conn.fetchrow(query, username)
             return Streamer(**dict(record)) if record else None
     
@@ -296,11 +302,13 @@ class DatabaseService:
         """Get streamer by Kick user ID."""
         async with self.get_connection() as conn:
             query = """
-            SELECT id, kick_user_id, username, display_name, status, 
-                   last_seen_online, last_status_update, created_at, updated_at, is_active
+            SELECT id, kick_user_id, username, display_name, status,
+                   last_seen_online, last_status_update, created_at, updated_at, is_active,
+                   current_viewers, peak_viewers, avg_viewers, livestream_id, channel_id,
+                   profile_picture_url, bio, follower_count, is_live, is_verified
             FROM streamer WHERE kick_user_id = $1
             """
-            
+
             record = await conn.fetchrow(query, kick_user_id)
             return Streamer(**dict(record)) if record else None
     
@@ -310,7 +318,7 @@ class DatabaseService:
             query = """
             SELECT id, kick_user_id, username, display_name, status,
                    last_seen_online, last_status_update, created_at, updated_at, is_active,
-                   current_viewers, peak_viewers, avg_viewers, livestream_id,
+                   current_viewers, peak_viewers, avg_viewers, livestream_id, channel_id,
                    profile_picture_url, bio, follower_count, is_live, is_verified
             FROM streamer WHERE is_active = true
             ORDER BY username
@@ -391,8 +399,10 @@ class DatabaseService:
             UPDATE streamer 
             SET {', '.join(update_fields)}, updated_at = CURRENT_TIMESTAMP
             WHERE id = ${param_count}
-            RETURNING id, kick_user_id, username, display_name, status, 
-                     last_seen_online, last_status_update, created_at, updated_at, is_active
+            RETURNING id, kick_user_id, username, display_name, status,
+                     last_seen_online, last_status_update, created_at, updated_at, is_active,
+                     current_viewers, peak_viewers, avg_viewers, livestream_id, channel_id,
+                     profile_picture_url, bio, follower_count, is_live, is_verified
             """
             
             record = await conn.fetchrow(query, *values)
@@ -421,7 +431,7 @@ class DatabaseService:
             WHERE id = $1
             RETURNING id, kick_user_id, username, display_name, status,
                      last_seen_online, last_status_update, created_at, updated_at, is_active,
-                     current_viewers, peak_viewers, avg_viewers, livestream_id,
+                     current_viewers, peak_viewers, avg_viewers, livestream_id, channel_id,
                      profile_picture_url, bio, follower_count, is_live, is_verified
             """
             
@@ -587,8 +597,9 @@ class DatabaseService:
             SET {', '.join(update_fields)}
             WHERE id = ${param_count}
             RETURNING id, kick_user_id, username, display_name, status, profile_picture_url,
-                     bio, follower_count, is_live, is_verified, last_seen_online, 
-                     last_status_update, created_at, updated_at, is_active
+                     bio, follower_count, is_live, is_verified, last_seen_online,
+                     last_status_update, created_at, updated_at, is_active,
+                     current_viewers, peak_viewers, avg_viewers, livestream_id, channel_id
             """
             
             record = await self.pool.fetchrow(query, *values)
@@ -1407,7 +1418,8 @@ class DatabaseService:
             return [dict(record) for record in records]
 
     async def update_streamer_viewer_stats(self, streamer_id: int, current_viewers: int,
-                                         livestream_id: Optional[int] = None) -> bool:
+                                         livestream_id: Optional[int] = None,
+                                         channel_id: Optional[int] = None) -> bool:
         """Update streamer's current viewer count and related stats."""
         async with self.transaction() as conn:
             # Get current peak for this stream session
@@ -1420,11 +1432,12 @@ class DatabaseService:
             SET current_viewers = $1,
                 peak_viewers = GREATEST(COALESCE(peak_viewers, 0), $1),
                 livestream_id = $2,
+                channel_id = $3,
                 last_status_update = NOW()
-            WHERE id = $3
+            WHERE id = $4
             """
 
-            result = await conn.execute(update_query, current_viewers, livestream_id, streamer_id)
+            result = await conn.execute(update_query, current_viewers, livestream_id, channel_id, streamer_id)
             return result == "UPDATE 1"
 
     async def get_viewer_trends(self, days: int = 7) -> List[Dict[str, Any]]:
