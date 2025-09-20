@@ -364,9 +364,13 @@ class IPv6Bot:
                     if not self.channel_id:
                         raise ValueError(f"No channel_id available for {self.streamer_name}")
 
-                    logger_mgr.debug(f"Session attempt {attempt + 1}/{max_session_attempts}: Using channel_id {self.channel_id} from C2")
+                    logger_mgr.debug(f"Session attempt {attempt + 1}/{max_session_attempts}: Establishing session for channel_id {self.channel_id}")
 
-                    # Only get WebSocket token, not channel details
+                    # IMPORTANT: Still make the channel API call to establish session
+                    # Kick tracks the full flow from same IP: channel API -> token -> websocket
+                    await self._establish_session(scraper, ipv6_address, logger_mgr)
+
+                    # Now get WebSocket token with established session
                     ws_token = await self._get_websocket_token(scraper, ipv6_address, logger_mgr)
                     if not ws_token:
                         raise ValueError("Failed to get WebSocket token")
@@ -401,6 +405,60 @@ class IPv6Bot:
                 scraper.close()
             except:
                 pass
+
+    async def _establish_session(self, scraper, ipv6_address: str, logger_mgr):
+        """
+        Make channel API call to establish session with Kick.
+        This is required for viewer count to register properly.
+        We use the IDs from C2 but still make the API call for session tracking.
+        """
+        if not self.streamer_name:
+            return False
+
+        try:
+            import functools
+            original_socket = socket.socket
+
+            def bound_socket(*args, **kwargs):
+                sock = original_socket(*args, **kwargs)
+                try:
+                    if sock.family == socket.AF_INET6 and sock.type == socket.SOCK_STREAM:
+                        sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+                        sock.bind((ipv6_address, 0))
+                except OSError as e:
+                    if e.errno != 22:
+                        logger_mgr.debug(f"Could not bind IPv6: {e}")
+                except Exception:
+                    pass
+                return sock
+
+            # Temporarily replace socket.socket
+            socket.socket = bound_socket
+
+            try:
+                # Make channel API call to establish session
+                api_url = f"https://kick.com/api/v2/channels/{self.streamer_name}"
+                logger_mgr.debug(f"Establishing session via channel API: {api_url}")
+
+                channel_response = await asyncio.to_thread(scraper.get, api_url, timeout=20)
+
+                if channel_response.status_code == 403:
+                    logger_mgr.error(f"Got 403 Forbidden - Cloudflare block detected")
+                    raise ValueError("403 Forbidden - Cloudflare protection active")
+
+                channel_response.raise_for_status()
+
+                # We don't need to parse the response since we have IDs from C2
+                # This call is just to establish the session
+                logger_mgr.debug(f"Session established for {self.streamer_name} (status: {channel_response.status_code})")
+                return True
+
+            finally:
+                socket.socket = original_socket
+
+        except Exception as e:
+            logger_mgr.error(f"Failed to establish session: {e}", exc_info=self.debug)
+            return False
 
     async def _get_websocket_token(self, scraper, ipv6_address: str, logger_mgr):
         """Get WebSocket token only (channel_id and livestream_id come from C2 API)"""
