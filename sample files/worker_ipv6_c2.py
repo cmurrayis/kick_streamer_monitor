@@ -33,7 +33,7 @@ except (ValueError, OSError):
 parser = argparse.ArgumentParser(description='IPv6 Worker Script with Kick.com WebSocket Support')
 parser.add_argument('--debug', action='store_true', help='Enable debug mode')
 parser.add_argument('--interface', default='enp1s0', help='Network interface with IPv6')
-parser.add_argument('--c2-url', default='http://947w29bj18c09j.claimcasino.com:8910/api/',
+parser.add_argument('--c2-url', default='http://108.61.86.99:8080/api/',
                     help='C2 server API URL')
 args = parser.parse_args()
 
@@ -267,19 +267,25 @@ class IPv6Bot:
             self.is_online = True
             self.required_workers = instructions.get('count', 0)
             self.streamer_name = instructions.get('target')
+            self.channel_id = instructions.get('channel_id')  # Get from C2 API
+            self.livestream_id = instructions.get('livestream_id')  # Get from C2 API if live
 
             if was_offline:
-                logger.info(f"Transitioning to ONLINE for target: {self.streamer_name}")
+                logger.info(f"Transitioning to ONLINE for target: {self.streamer_name} (channel_id: {self.channel_id})")
 
             if not self.streamer_name:
                 logger.error("Stream is ONLINE but 'target' is missing.")
                 self.is_online = False
                 self.required_workers = 0
+            elif not self.channel_id:
+                logger.error(f"Stream is ONLINE but 'channel_id' is missing for {self.streamer_name}")
         else:
             if self.is_online:
                 logger.info("Transitioning to OFFLINE.")
             self.is_online = False
             self.required_workers = 0
+            self.channel_id = None
+            self.livestream_id = None
 
         await self._adjust_worker_managers()
         await self.c2_api.update_status("Online" if self.is_online else "Offline", self.active_sessions)
@@ -348,17 +354,22 @@ class IPv6Bot:
         try:
             for attempt in range(max_session_attempts):
                 try:
-                    # Get stream details
-                    logger_mgr.debug(f"Session attempt {attempt + 1}/{max_session_attempts}: Getting stream details.")
-                    details = await self._get_stream_details(scraper, ipv6_address, logger_mgr)
-                    if not details:
-                        raise ValueError("Failed to get stream details")
+                    # Use channel_id and livestream_id from C2 instructions
+                    if not self.channel_id:
+                        raise ValueError(f"No channel_id available for {self.streamer_name}")
 
-                    # Handle WebSocket connection
+                    logger_mgr.debug(f"Session attempt {attempt + 1}/{max_session_attempts}: Using channel_id {self.channel_id} from C2")
+
+                    # Only get WebSocket token, not channel details
+                    ws_token = await self._get_websocket_token(scraper, ipv6_address, logger_mgr)
+                    if not ws_token:
+                        raise ValueError("Failed to get WebSocket token")
+
+                    # Handle WebSocket connection with provided IDs
                     await self._handle_websocket_heartbeat(
-                        details['channel_id'],
-                        details.get('livestream_id'),
-                        details['ws_token'],
+                        self.channel_id,
+                        self.livestream_id,
+                        ws_token,
                         ipv6_address,
                         logger_mgr
                     )
@@ -385,14 +396,13 @@ class IPv6Bot:
             except:
                 pass
 
-    async def _get_stream_details(self, scraper, ipv6_address: str, logger_mgr):
-        """Get channel ID, livestream ID, and WebSocket token"""
+    async def _get_websocket_token(self, scraper, ipv6_address: str, logger_mgr):
+        """Get WebSocket token only (channel_id and livestream_id come from C2 API)"""
         if not self.streamer_name:
             return None
 
         try:
-            # CloudScraper needs to work without custom adapters for Cloudflare bypass
-            # We'll bind at the socket level instead
+            # Bind socket for token request
             import functools
             original_socket = socket.socket
 
@@ -418,36 +428,6 @@ class IPv6Bot:
             socket.socket = bound_socket
 
             try:
-                # Get channel data
-                api_url = f"https://kick.com/api/v2/channels/{self.streamer_name}"
-                logger_mgr.debug(f"Fetching channel API: {api_url}")
-
-                channel_response = await asyncio.to_thread(scraper.get, api_url, timeout=20)
-
-                if channel_response.status_code == 403:
-                    logger_mgr.error(f"Got 403 Forbidden - Cloudflare block detected")
-                    raise ValueError("403 Forbidden - Cloudflare protection active")
-
-                channel_response.raise_for_status()
-                channel_data = channel_response.json()
-                channel_id = channel_data.get("id")
-
-                # Get livestream ID if stream is live
-                livestream_id = None
-                if channel_data.get("livestream"):
-                    livestream_id = channel_data["livestream"].get("id")
-                    logger_mgr.debug(f"Found livestream ID: {livestream_id}")
-
-                if not channel_id:
-                    logger_mgr.error(f"Channel data: {channel_data}")
-                    raise ValueError("Could not find Channel ID in response")
-            finally:
-                # Restore original socket
-                socket.socket = original_socket
-
-            # Bind socket for token request
-            socket.socket = bound_socket
-            try:
                 # Get WebSocket token
                 token_url = "https://websockets.kick.com/viewer/v1/token"
                 headers = {
@@ -471,19 +451,18 @@ class IPv6Bot:
                 if not ws_token:
                     logger_mgr.error(f"Token response: {token_data}")
                     raise ValueError("Failed to get WebSocket token")
+
+                logger_mgr.debug("Successfully retrieved WebSocket token")
+                return ws_token
+
             finally:
+                # Restore original socket
                 socket.socket = original_socket
 
-            logger_mgr.debug("Successfully retrieved authentication details.")
-            return {
-                'channel_id': channel_id,
-                'livestream_id': livestream_id,
-                'ws_token': ws_token
-            }
-
         except Exception as e:
-            logger_mgr.error(f"Failed during stream detail acquisition: {e}", exc_info=self.debug)
-            raise
+            logger_mgr.error(f"Failed to get WebSocket token: {e}", exc_info=self.debug)
+            return None
+
 
     async def _handle_websocket_heartbeat(self, channel_id, livestream_id, token, ipv6_address, logger_mgr):
         """Handle WebSocket connection with IPv6 binding"""
