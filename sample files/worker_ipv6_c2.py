@@ -562,7 +562,7 @@ class IPv6Bot:
         base_retry_delay = 2
 
         for retry_attempt in range(max_ws_retries):
-            # Use semaphore to limit concurrent WebSocket connections
+            # Use semaphore ONLY for connection establishment to avoid thundering herd
             async with self.websocket_semaphore:
                 # Add minimum delay between WebSocket connections to avoid rate limiting
                 current_time = time.time()
@@ -571,84 +571,117 @@ class IPv6Bot:
                     await asyncio.sleep(0.2 - time_since_last)
                 self.last_websocket_time = time.time()
 
+                logger_mgr.debug(f"WebSocket connection attempt {retry_attempt + 1}/{max_ws_retries} for channel {channel_id}")
+
                 try:
-                    self.open_sockets += 1
-                    logger_mgr.debug(f"WebSocket connection attempt {retry_attempt + 1}/{max_ws_retries} for channel {channel_id}")
+                    # Connect WebSocket with increased timeout and retry logic
+                    websocket = await websockets.connect(
+                        ws_url,
+                        ping_interval=20,
+                        ping_timeout=20,
+                        open_timeout=30,  # Increase from default 10s to 30s
+                        close_timeout=10
+                    )
+                except Exception as e:
+                    logger_mgr.warning(f"Failed to establish WebSocket connection: {e}")
+                    if retry_attempt + 1 >= max_ws_retries:
+                        return
+                    await asyncio.sleep(base_retry_delay * (retry_attempt + 1))
+                    continue
 
-                    # Socket binding is already handled at session level in _execute_viewer_simulation
-                    # No need to bind again for WebSocket connection
-                    try:
-                        # Connect WebSocket with increased timeout and retry logic
-                        async with websockets.connect(
-                            ws_url,
-                            ping_interval=20,
-                            ping_timeout=20,
-                            open_timeout=30,  # Increase from default 10s to 30s
-                            close_timeout=10
-                        ) as websocket:
-                            logger_mgr.info(f"WebSocket connected for channel ID {channel_id}")
+            # Semaphore released here - connection established
+            # Now handle the WebSocket session without holding the semaphore
+            try:
+                self.open_sockets += 1
+                logger_mgr.info(f"WebSocket connected for channel ID {channel_id}")
 
-                            # Send initial handshake
-                            initial_handshake = {
-                                "type": "channel_handshake",
-                                "data": {"message": {"channelId": str(channel_id)}}
-                            }
-                            await websocket.send(json.dumps(initial_handshake))
-                            logger_mgr.debug("Sent initial channel handshake")
+                # Socket binding is already handled at session level in _execute_viewer_simulation
+                # No need to bind again for WebSocket connection
+                try:
+                    async with websocket:
+                        # Send initial handshake
+                        initial_handshake = {
+                            "type": "channel_handshake",
+                            "data": {"message": {"channelId": str(channel_id)}}
+                        }
+                        await websocket.send(json.dumps(initial_handshake))
+                        logger_mgr.debug("Sent initial channel handshake")
 
-                            # Send initial ping
-                            await websocket.send(json.dumps({"type": "ping"}))
-                            logger_mgr.debug("Sent initial ping")
+                        # Send initial ping
+                        await websocket.send(json.dumps({"type": "ping"}))
+                        logger_mgr.debug("Sent initial ping")
 
-                            async def receive_handler():
-                                """Handle incoming messages"""
+                        async def receive_handler():
+                            """Handle incoming messages"""
+                            try:
+                                async for message in websocket:
+                                    if self.debug:
+                                        logger_mgr.debug(f"Received: {message[:200]}")
+                                    try:
+                                        data = json.loads(message)
+                                        if data.get('type') == 'pong':
+                                            logger_mgr.debug("Received pong")
+                                    except json.JSONDecodeError:
+                                        logger_mgr.warning(f"Could not decode: {message[:200]}")
+                            except ConnectionClosed:
+                                logger_mgr.debug("Receive handler: connection closed")
+                            except Exception as e:
+                                logger_mgr.error(f"Receive handler error: {e}")
+
+                        async def periodic_handshake():
+                            """Send handshakes every 15 seconds"""
+                            msg = {"type": "channel_handshake", "data": {"message": {"channelId": str(channel_id)}}}
+                            while True:
+                                await asyncio.sleep(15)
+                                if not self.is_online:
+                                    break
                                 try:
-                                    async for message in websocket:
-                                        if self.debug:
-                                            logger_mgr.debug(f"Received: {message[:200]}")
-                                        try:
-                                            data = json.loads(message)
-                                            if data.get('type') == 'pong':
-                                                logger_mgr.debug("Received pong")
-                                        except json.JSONDecodeError:
-                                            logger_mgr.warning(f"Could not decode: {message[:200]}")
-                                except ConnectionClosed:
-                                    logger_mgr.debug("Receive handler: connection closed")
-                                except Exception as e:
-                                    logger_mgr.error(f"Receive handler error: {e}")
+                                    await websocket.send(json.dumps(msg))
+                                    logger_mgr.debug("Sent periodic handshake")
+                                except (ConnectionClosed, Exception) as e:
+                                    logger_mgr.debug(f"Handshake loop ending: {e}")
+                                    break
 
-                            async def periodic_handshake():
-                                """Send handshakes every 15 seconds"""
-                                msg = {"type": "channel_handshake", "data": {"message": {"channelId": str(channel_id)}}}
-                                while True:
-                                    await asyncio.sleep(15)
-                                    if not self.is_online:
-                                        break
-                                    try:
-                                        await websocket.send(json.dumps(msg))
-                                        logger_mgr.debug("Sent periodic handshake")
-                                    except (ConnectionClosed, Exception) as e:
-                                        logger_mgr.debug(f"Handshake loop ending: {e}")
-                                        break
+                        async def periodic_ping():
+                            """Send pings every 30 seconds"""
+                            while True:
+                                await asyncio.sleep(30)
+                                if not self.is_online:
+                                    break
+                                try:
+                                    await websocket.send(json.dumps({"type": "ping"}))
+                                    logger_mgr.debug("Sent periodic ping")
+                                except (ConnectionClosed, Exception) as e:
+                                    logger_mgr.debug(f"Ping loop ending: {e}")
+                                    break
 
-                            async def periodic_ping():
-                                """Send pings every 30 seconds"""
-                                while True:
-                                    await asyncio.sleep(30)
-                                    if not self.is_online:
-                                        break
-                                    try:
-                                        await websocket.send(json.dumps({"type": "ping"}))
-                                        logger_mgr.debug("Sent periodic ping")
-                                    except (ConnectionClosed, Exception) as e:
-                                        logger_mgr.debug(f"Ping loop ending: {e}")
-                                        break
+                        async def tracking_event():
+                            """Send tracking event every 2 minutes (critical for viewer count!)"""
+                            # Send initial tracking event immediately if we have a livestream
+                            if livestream_id:
+                                try:
+                                    tracking_msg = {
+                                        "type": "user_event",
+                                        "data": {
+                                            "message": {
+                                                "name": "tracking.user.watch.livestream",
+                                                "channel_id": int(channel_id),
+                                                "livestream_id": int(livestream_id)
+                                            }
+                                        }
+                                    }
+                                    await websocket.send(json.dumps(tracking_msg))
+                                    logger_mgr.info(f"Sent initial tracking event for livestream {livestream_id}")
+                                except (ConnectionClosed, Exception) as e:
+                                    logger_mgr.debug(f"Failed to send initial tracking event: {e}")
 
-                            async def tracking_event():
-                                """Send tracking event every 2 minutes (critical for viewer count!)"""
-                                # Send initial tracking event immediately if we have a livestream
-                                if livestream_id:
-                                    try:
+                            # Continue sending every 2 minutes
+                            while True:
+                                await asyncio.sleep(120)  # 2 minutes
+                                if not self.is_online:
+                                    break
+                                try:
+                                    if livestream_id:
                                         tracking_msg = {
                                             "type": "user_event",
                                             "data": {
@@ -660,101 +693,79 @@ class IPv6Bot:
                                             }
                                         }
                                         await websocket.send(json.dumps(tracking_msg))
-                                        logger_mgr.info(f"Sent initial tracking event for livestream {livestream_id}")
-                                    except (ConnectionClosed, Exception) as e:
-                                        logger_mgr.debug(f"Failed to send initial tracking event: {e}")
+                                        logger_mgr.debug(f"Sent periodic tracking event for livestream {livestream_id}")
+                                except (ConnectionClosed, Exception) as e:
+                                    logger_mgr.debug(f"Tracking loop ending: {e}")
+                                    break
 
-                                # Continue sending every 2 minutes
-                                while True:
-                                    await asyncio.sleep(120)  # 2 minutes
-                                    if not self.is_online:
-                                        break
-                                    try:
-                                        if livestream_id:
-                                            tracking_msg = {
-                                                "type": "user_event",
-                                                "data": {
-                                                    "message": {
-                                                        "name": "tracking.user.watch.livestream",
-                                                        "channel_id": int(channel_id),
-                                                        "livestream_id": int(livestream_id)
-                                                    }
-                                                }
-                                            }
-                                            await websocket.send(json.dumps(tracking_msg))
-                                            logger_mgr.debug(f"Sent periodic tracking event for livestream {livestream_id}")
-                                    except (ConnectionClosed, Exception) as e:
-                                        logger_mgr.debug(f"Tracking loop ending: {e}")
-                                        break
+                        # Run all tasks concurrently
+                        await asyncio.gather(
+                            receive_handler(),
+                            periodic_handshake(),
+                            periodic_ping(),
+                            tracking_event()  # This is critical for being counted!
+                        )
 
-                            # Run all tasks concurrently
-                            await asyncio.gather(
-                                receive_handler(),
-                                periodic_handshake(),
-                                periodic_ping(),
-                                tracking_event()  # This is critical for being counted!
-                            )
-
-                            logger_mgr.info(f"WebSocket tasks completed for channel {channel_id}")
-                            return  # Success - exit retry loop
-
-                    except (ConnectionClosed, websockets.exceptions.ConnectionClosedError) as e:
-                        logger_mgr.warning(f"WebSocket connection closed: {e}")
-                        raise
-                    except websockets.exceptions.InvalidStatus as e:
-                        # Handle HTTP 429 (Too Many Requests) specifically
-                        if hasattr(e, 'status_code') and e.status_code == 429:
-                            logger_mgr.warning(f"HTTP 429 Rate limited - will retry with backoff")
-                            # Extract Retry-After header if available
-                            retry_after = 10  # Default 10 seconds
-                            if hasattr(e, 'headers') and 'Retry-After' in e.headers:
-                                retry_after = int(e.headers['Retry-After'])
-                            logger_mgr.info(f"Waiting {retry_after} seconds before retry (Cloudflare rate limit)")
-                            await asyncio.sleep(retry_after + random.uniform(1, 3))  # Add jitter
-                            raise  # Re-raise to trigger retry logic
-                        else:
-                            logger_mgr.error(f"WebSocket handshake failed: {e}")
-                            raise
-                    except Exception as e:
-                        logger_mgr.error(f"WebSocket error: {e}", exc_info=self.debug)
-                        raise
-
-                except asyncio.TimeoutError as e:
-                    self.open_sockets -= 1
-                    logger_mgr.warning(f"WebSocket timeout (attempt {retry_attempt + 1}/{max_ws_retries}): {e}")
-
-                    if retry_attempt + 1 >= max_ws_retries:
-                        logger_mgr.error(f"Max WebSocket retries reached for channel {channel_id}")
-                        raise
-
-                    # Exponential backoff with jitter
-                    retry_delay = base_retry_delay * (2 ** retry_attempt) + random.uniform(0, 2)
-                    logger_mgr.info(f"Retrying WebSocket connection in {retry_delay:.1f} seconds...")
-                    await asyncio.sleep(retry_delay)
+                        logger_mgr.info(f"WebSocket tasks completed for channel {channel_id}")
+                        return  # Success - exit retry loop
 
                 except (ConnectionClosed, websockets.exceptions.ConnectionClosedError) as e:
-                    self.open_sockets -= 1
-                    logger_mgr.warning(f"WebSocket closed (attempt {retry_attempt + 1}/{max_ws_retries}): {e}")
+                    logger_mgr.warning(f"WebSocket connection closed: {e}")
+                    raise
+                except websockets.exceptions.InvalidStatus as e:
+                    # Handle HTTP 429 (Too Many Requests) specifically
+                    if hasattr(e, 'status_code') and e.status_code == 429:
+                        logger_mgr.warning(f"HTTP 429 Rate limited - will retry with backoff")
+                        # Extract Retry-After header if available
+                        retry_after = 10  # Default 10 seconds
+                        if hasattr(e, 'headers') and 'Retry-After' in e.headers:
+                            retry_after = int(e.headers['Retry-After'])
+                        logger_mgr.info(f"Waiting {retry_after} seconds before retry (Cloudflare rate limit)")
+                        await asyncio.sleep(retry_after + random.uniform(1, 3))  # Add jitter
+                        raise  # Re-raise to trigger retry logic
+                    else:
+                        logger_mgr.error(f"WebSocket handshake failed: {e}")
+                        raise
+                except Exception as e:
+                    logger_mgr.error(f"WebSocket error: {e}", exc_info=self.debug)
+                    raise
 
+            except asyncio.TimeoutError as e:
+                self.open_sockets -= 1
+                logger_mgr.warning(f"WebSocket timeout (attempt {retry_attempt + 1}/{max_ws_retries}): {e}")
+
+                if retry_attempt + 1 >= max_ws_retries:
+                    logger_mgr.error(f"Max WebSocket retries reached for channel {channel_id}")
+                    raise
+
+                # Exponential backoff with jitter
+                retry_delay = base_retry_delay * (2 ** retry_attempt) + random.uniform(0, 2)
+                logger_mgr.info(f"Retrying WebSocket connection in {retry_delay:.1f} seconds...")
+                await asyncio.sleep(retry_delay)
+
+            except (ConnectionClosed, websockets.exceptions.ConnectionClosedError) as e:
+                self.open_sockets -= 1
+                logger_mgr.warning(f"WebSocket closed (attempt {retry_attempt + 1}/{max_ws_retries}): {e}")
+
+                if retry_attempt + 1 >= max_ws_retries:
+                    raise
+
+                await asyncio.sleep(base_retry_delay)
+
+            except websockets.exceptions.InvalidStatus as e:
+                self.open_sockets -= 1
+                # Special handling for HTTP 429
+                if hasattr(e, 'status_code') and e.status_code == 429:
+                    logger_mgr.warning(f"HTTP 429 on attempt {retry_attempt + 1}/{max_ws_retries}")
+                    # Use longer delay for rate limiting
+                    retry_delay = 10 + (retry_attempt * 5) + random.uniform(0, 5)
+                    logger_mgr.info(f"Rate limited - waiting {retry_delay:.1f}s before retry")
+                    await asyncio.sleep(retry_delay)
+                else:
+                    logger_mgr.error(f"WebSocket error for channel {channel_id}: {e}", exc_info=self.debug)
                     if retry_attempt + 1 >= max_ws_retries:
                         raise
-
                     await asyncio.sleep(base_retry_delay)
-
-                except websockets.exceptions.InvalidStatus as e:
-                    self.open_sockets -= 1
-                    # Special handling for HTTP 429
-                    if hasattr(e, 'status_code') and e.status_code == 429:
-                        logger_mgr.warning(f"HTTP 429 on attempt {retry_attempt + 1}/{max_ws_retries}")
-                        # Use longer delay for rate limiting
-                        retry_delay = 10 + (retry_attempt * 5) + random.uniform(0, 5)
-                        logger_mgr.info(f"Rate limited - waiting {retry_delay:.1f}s before retry")
-                        await asyncio.sleep(retry_delay)
-                    else:
-                        logger_mgr.error(f"WebSocket error for channel {channel_id}: {e}", exc_info=self.debug)
-                        if retry_attempt + 1 >= max_ws_retries:
-                            raise
-                        await asyncio.sleep(base_retry_delay)
 
         # If we get here, all retries failed
         logger_mgr.error(f"All WebSocket connection attempts failed for channel {channel_id}")
