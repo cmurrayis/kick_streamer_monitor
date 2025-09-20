@@ -640,6 +640,25 @@ class IPv6Bot:
 
                         async def tracking_event():
                             """Send tracking event every 2 minutes (critical for viewer count!)"""
+                            # Send initial tracking event immediately if we have a livestream
+                            if livestream_id:
+                                try:
+                                    tracking_msg = {
+                                        "type": "user_event",
+                                        "data": {
+                                            "message": {
+                                                "name": "tracking.user.watch.livestream",
+                                                "channel_id": int(channel_id),
+                                                "livestream_id": int(livestream_id)
+                                            }
+                                        }
+                                    }
+                                    await websocket.send(json.dumps(tracking_msg))
+                                    logger_mgr.info(f"Sent initial tracking event for livestream {livestream_id}")
+                                except (ConnectionClosed, Exception) as e:
+                                    logger_mgr.debug(f"Failed to send initial tracking event: {e}")
+
+                            # Continue sending every 2 minutes
                             while True:
                                 await asyncio.sleep(120)  # 2 minutes
                                 if not self.is_online:
@@ -657,7 +676,7 @@ class IPv6Bot:
                                             }
                                         }
                                         await websocket.send(json.dumps(tracking_msg))
-                                        logger_mgr.debug(f"Sent tracking event for livestream {livestream_id}")
+                                        logger_mgr.debug(f"Sent periodic tracking event for livestream {livestream_id}")
                                 except (ConnectionClosed, Exception) as e:
                                     logger_mgr.debug(f"Tracking loop ending: {e}")
                                     break
