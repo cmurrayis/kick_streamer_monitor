@@ -204,7 +204,11 @@ class IPv6Bot:
         self.is_online = False
         self.streamer_name = None
         self.channel_id = None
+        self.livestream_id = None
         self.client_token = 'e1393935a959b4020a4491574f6490129f678acdaa92760471263db43487f823'
+        # Add rate limiter for WebSocket connections
+        self.websocket_semaphore = asyncio.Semaphore(5)  # Max 5 concurrent WebSocket connection attempts
+        self.last_websocket_time = 0
 
     async def run(self):
         """Main bot loop that fetches instructions from C2 server"""
@@ -297,8 +301,28 @@ class IPv6Bot:
         while len(self.worker_manager_tasks) > self.required_workers:
             self.worker_manager_tasks.pop().cancel()
 
-        while len(self.worker_manager_tasks) < self.required_workers:
-            self.worker_manager_tasks.add(asyncio.create_task(self._worker_manager()))
+        # Stagger worker starts to avoid thundering herd and rate limiting
+        workers_to_add = self.required_workers - len(self.worker_manager_tasks)
+        if workers_to_add > 0:
+            logger.info(f"Starting {workers_to_add} workers with staggered delays")
+
+            # Calculate appropriate delay based on number of workers
+            # For 100 workers, spread over ~60 seconds
+            if workers_to_add <= 10:
+                delay_per_worker = 0.2
+            elif workers_to_add <= 50:
+                delay_per_worker = 0.5
+            else:
+                delay_per_worker = 0.8
+
+            async def start_workers_staggered():
+                for i in range(workers_to_add):
+                    self.worker_manager_tasks.add(asyncio.create_task(self._worker_manager()))
+                    if i < workers_to_add - 1:  # Don't delay after last worker
+                        await asyncio.sleep(delay_per_worker + random.uniform(0, 0.3))
+
+            # Start the staggered worker creation as a background task
+            asyncio.create_task(start_workers_staggered())
 
     async def _worker_manager(self):
         """Manages a single viewer session"""
@@ -331,8 +355,7 @@ class IPv6Bot:
 
                 try:
                     logger_mgr.info(f"Thread {manager_id} acquired unique IPv6: {ipv6_address} for '{self.streamer_name}'")
-                    # Add small random delay to avoid thundering herd
-                    await asyncio.sleep(random.uniform(0.5, 2.0))
+                    # No additional delay here since we stagger in _adjust_worker_managers
                     await self._execute_viewer_simulation(ipv6_address, logger_mgr)
                 except asyncio.CancelledError:
                     raise
@@ -513,13 +536,22 @@ class IPv6Bot:
         base_retry_delay = 2
 
         for retry_attempt in range(max_ws_retries):
-            try:
-                self.open_sockets += 1
-                logger_mgr.debug(f"WebSocket connection attempt {retry_attempt + 1}/{max_ws_retries} for channel {channel_id}")
+            # Use semaphore to limit concurrent WebSocket connections
+            async with self.websocket_semaphore:
+                # Add minimum delay between WebSocket connections to avoid rate limiting
+                current_time = time.time()
+                time_since_last = current_time - self.last_websocket_time
+                if time_since_last < 0.2:  # Minimum 200ms between connections
+                    await asyncio.sleep(0.2 - time_since_last)
+                self.last_websocket_time = time.time()
 
-                # Socket binding is already handled at session level in _execute_viewer_simulation
-                # No need to bind again for WebSocket connection
                 try:
+                    self.open_sockets += 1
+                    logger_mgr.debug(f"WebSocket connection attempt {retry_attempt + 1}/{max_ws_retries} for channel {channel_id}")
+
+                    # Socket binding is already handled at session level in _execute_viewer_simulation
+                    # No need to bind again for WebSocket connection
+                    try:
                     # Connect WebSocket with increased timeout and retry logic
                     async with websockets.connect(
                         ws_url,
